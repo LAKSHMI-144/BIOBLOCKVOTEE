@@ -12,6 +12,7 @@ app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/voters', require('./routes/voterRoutes'));
 app.use('/api/votes', require('./routes/voteRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 
 app.get('/', (req, res) => res.json({ message: 'BlockBioVote Server Running ✅' }));
 

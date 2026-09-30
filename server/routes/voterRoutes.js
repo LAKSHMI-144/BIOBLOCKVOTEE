@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const ai = require('../config/ai');
+const requireAdmin = require('../middleware/requireAdmin');
 
 const VOTER_ID_RE = /^[A-Z0-9-]{4,20}$/;
 const GENDERS = ['', 'Male', 'Female', 'Other'];
@@ -115,7 +116,7 @@ router.post('/authenticate', async (req, res) => {
     }
 });
 
-router.get('/all', async (req, res) => {
+router.get('/all', requireAdmin, async (req, res) => {
     try {
         const [rows] = await db.query("SELECT voter_id, name, age, has_voted, is_eligible, face_encoding IS NOT NULL AS face_registered, registered_at FROM voters");
         res.json(rows);
