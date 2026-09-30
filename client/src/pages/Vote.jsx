@@ -1,15 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
 import Webcam from 'react-webcam'
 import axios from 'axios'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
+import { useVoter } from '../voterSession'
 
 const API = 'http://localhost:5000/api'
 
-export default function Vote() {
+// mode 'auth': face verification only, then on to the voter dashboard.
+// mode 'vote': candidate selection + confirmation (requires a verified voter).
+export default function Vote({ mode = 'auth' }) {
   const nav = useNavigate()
   const webcamRef = useRef(null)
-  const [step, setStep] = useState('auth')
-  const [voter, setVoter] = useState(null)
+  const { voter, setVoter, pendingId, setReceipt: saveReceipt } = useVoter()
+  const [step, setStep] = useState(mode === 'vote' ? 'vote' : 'auth')
   const [candidates, setCandidates] = useState([])
   const [selected, setSelected] = useState('')
   const [msg, setMsg] = useState('')
@@ -25,9 +28,12 @@ export default function Vote() {
     if (!img) { setMsg('❌ Camera error'); return }
     setLoading(true); setMsg('🔍 Authenticating...')
     const res = await axios.post(`${API}/voters/authenticate`, { face_image: img.split(',')[1] }).catch(()=>({data:{success:false,message:'Server error'}}))
-    if (res.data.success) {
+    if (res.data.success && pendingId && String(res.data.voter_id).toUpperCase() !== pendingId) {
+      // Browser-side consistency check only; the server does not yet bind the entered ID to the face.
+      setMsg('❌ The verified face does not match the Voter ID you entered.')
+    } else if (res.data.success) {
       setVoter({ id: res.data.voter_id, name: res.data.voter_name })
-      setMsg(''); setStep('vote')
+      setMsg(''); nav('/voter/dashboard')
     } else {
       setMsg('❌ ' + res.data.message)
     }
@@ -40,10 +46,12 @@ export default function Vote() {
     const [cand_id] = selected.split(':')
     setLoading(true)
     const res = await axios.post(`${API}/votes/cast`, { voter_id: voter.id, candidate_id: parseInt(cand_id) }).catch(()=>({data:{success:false,message:'Server error'}}))
-    if (res.data.success) { setReceipt(res.data); setStep('done') }
+    if (res.data.success) { setReceipt(res.data); saveReceipt(res.data); setStep('done') }
     else setMsg('❌ ' + res.data.message)
     setLoading(false)
   }
+
+  if (mode === 'vote' && !voter) return <Navigate to="/voter/login" replace />
 
   return (
     <div className="page">
@@ -53,7 +61,7 @@ export default function Vote() {
           <p className="hint">Look at camera then click Authenticate</p>
           <Webcam ref={webcamRef} screenshotFormat="image/jpeg" width={300} className="webcam" />
           <button className="btn primary" style={{width:'100%',padding:14,fontSize:16}} onClick={authenticate} disabled={loading}>{loading?'Authenticating...':'🔐 Authenticate'}</button>
-          <button className="btn secondary" onClick={()=>nav('/')}>← Back</button>
+          <button className="btn secondary" onClick={()=>nav('/voter/login')}>← Back</button>
         </div>
       )}
       {step === 'vote' && (
@@ -71,7 +79,7 @@ export default function Vote() {
           ))}
           <div className="btn-row">
             <button className="btn primary" onClick={castVote} disabled={loading}>{loading?'Submitting...':'✅ Submit Vote'}</button>
-            <button className="btn secondary" onClick={()=>nav('/')}>Cancel</button>
+            <button className="btn secondary" onClick={()=>nav('/voter/dashboard')}>Cancel</button>
           </div>
         </div>
       )}
@@ -83,9 +91,9 @@ export default function Vote() {
             <p>🔗 Block Hash: <code>{receipt?.block_hash?.substring(0,35)}...</code></p>
             <p>🔒 Voter Hash: <code>{receipt?.voter_hash?.substring(0,35)}...</code></p>
             <p>📦 Block Index: <code>#{receipt?.block_index}</code></p>
-            <p className="hint" style={{marginTop:8}}>Your identity is hashed. Tamper-proof on blockchain.</p>
+            <p className="hint" style={{marginTop:8}}>Your voter ID is recorded on the chain only as a hash. Keep these values as your receipt.</p>
           </div>
-          <button className="btn primary" onClick={()=>nav('/')}>🏠 Home</button>
+          <button className="btn primary" onClick={()=>nav('/voter/dashboard')}>Back to dashboard</button>
         </div>
       )}
       {msg && <p className="msg">{msg}</p>}
