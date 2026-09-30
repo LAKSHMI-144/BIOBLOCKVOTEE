@@ -68,7 +68,9 @@ Open http://localhost:5173 (use `localhost`, not an IP, so the browser allows ca
 * Existing face templates from the old `face_recognition` (dlib) version are incompatible – those voters must re-register.
 * `POST /api/votes/cast` does not yet require a prior successful face authentication, and vote/blockchain writes are not atomic. (Planned: Phase 6/10.)
 * The blockchain lives in Python memory and resets when the AI service restarts. (Planned: Phase 7.)
-* No admin login/roles or election periods yet. (Planned: Phases 5, 10.)
+* Admin login is minimal (one env-configured account, 2-hour token, in-memory brute-force limit). No roles or election periods yet. (Planned: Phases 5, 10.)
+* Candidate add/edit/remove, election status and failed-login/security-event auditing do not exist yet, so those admin screens are read-only or absent.
+* The voter dashboard is presentation: `POST /api/votes/cast` still trusts the `voter_id` sent by the browser, and the entered Voter ID is only cross-checked in the browser.
 
 ## Running in VS Code (why double-clicking `index.html` shows nothing)
 `client/index.html` only contains an empty `<div id="root">` and a `<script src="/src/main.jsx">`. Browsers cannot run JSX or resolve `import 'react'` from a `file://` page, so the app must be served by the Vite dev server (`npm run dev`), which compiles the JSX on the fly. The full system needs **four things running at once**, each in its own VS Code terminal (Terminal → New Terminal, use the `+` button for more):
@@ -81,3 +83,18 @@ Open http://localhost:5173 (use `localhost`, not an IP, so the browser allows ca
 | 4 | React (Vite) | `client` | `npm run dev` | **http://localhost:5173** |
 
 The pages that need no backend (Home) load with only #4; Register/Vote/Results/Blockchain need #1–#3.
+
+## Portals and routes
+| Route | Purpose |
+|---|---|
+| `/` | Landing page |
+| `/voter/login` → `/voter/authenticate` → `/voter/dashboard` → `/voter/vote` | Voter flow (also `/voter/register`) |
+| `/admin/login` → `/admin` (dashboard, `candidates`, `voters`, `audit`, `blockchain`, `results`) | Admin / auditor portal |
+
+## Admin login setup
+Credentials live only in `server/.env` (never in Git or React):
+```
+cd server
+node scripts/hash-admin-password.js "a-strong-password-here"
+```
+Paste the two printed lines (`ADMIN_PASSWORD_HASH`, `ADMIN_TOKEN_SECRET`) into `server/.env`, set `ADMIN_USERNAME`, and restart the server. Without these the admin login reports "not configured".

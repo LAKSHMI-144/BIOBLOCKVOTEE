@@ -65,7 +65,7 @@ export default function Register() {
       await axios.post(`${API}/voters/register-face`, { voter_id: form.voter_id, images })
       set('success', 'Registration complete! Redirecting...')
       setImages([])
-      setTimeout(() => nav('/'), 1500)
+      setTimeout(() => nav('/voter/login'), 1500)
     } catch (e) {
       set('error', errMsg(e))
       setImages([])   // captures are discarded on failure; the voter retakes them
@@ -93,7 +93,7 @@ export default function Register() {
           <p className="hint" style={{ textAlign: 'left' }}>Voters aged 18 or above are eligible to vote.</p>
           <div className="btn-row">
             <button className="btn primary" onClick={submitDetails} disabled={loading}>{loading ? 'Saving...' : 'Next →'}</button>
-            <button className="btn secondary" onClick={() => nav('/')}>← Back</button>
+            <button className="btn secondary" onClick={() => nav('/voter/login')}>← Back</button>
           </div>
         </div>
       )}

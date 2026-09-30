@@ -1,36 +1,34 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import { useNavigate } from 'react-router-dom'
+import { adminApi } from '../api'
+import useLoad, { State } from '../components/useLoad'
 
 export default function Results() {
-  const nav = useNavigate()
-  const [data, setData] = useState({ candidates:[], total_votes:0, total_registered:0 })
-
-  useEffect(() => {
-    axios.get('http://localhost:5000/api/votes/results').then(r=>setData(r.data)).catch(()=>{})
-  }, [])
-
-  const max = Math.max(...data.candidates.map(c=>c.vote_count), 1)
+  const { data, error, loading } = useLoad(() => adminApi.get('/votes/results'))
+  const max = data ? Math.max(...data.candidates.map(c => c.vote_count), 1) : 1
+  const turnout = data && data.total_registered ? ((data.total_votes / data.total_registered) * 100).toFixed(1) : '0.0'
 
   return (
-    <div className="page">
-      <h2 className="title">📊 Live Election Results</h2>
-      <p className="hint">Votes Cast: {data.total_votes} / Registered: {data.total_registered}</p>
-      <div className="card" style={{marginTop:15,width:'100%',maxWidth:500}}>
-        {data.candidates.map((c,i)=>(
-          <div key={c.candidate_id} className="result-row">
-            <div style={{width:130,fontSize:14}}>
-              {i===0&&c.vote_count>0?'👑 ':''}{c.name}
-              <div style={{color:'#a8a8a8',fontSize:11}}>{c.party}</div>
-            </div>
-            <div className="bar-container">
-              <div className="bar" style={{width:`${(c.vote_count/max)*100}%`,background:i===0?'#e94560':'#533483'}}/>
-            </div>
-            <div style={{width:30,textAlign:'right',fontWeight:'bold'}}>{c.vote_count}</div>
+    <>
+      <h1>Results</h1><p className="sub">Live tally from the database</p>
+      <State loading={loading} error={error} />
+      {data && (
+        <>
+          <div className="bb-grid" style={{ marginBottom: 20 }}>
+            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}><div className="l">Registered voters</div><div className="v">{data.total_registered}</div></div>
+            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}><div className="l">Votes cast</div><div className="v">{data.total_votes}</div></div>
+            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}><div className="l">Turnout</div><div className="v">{turnout}%</div></div>
+            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}><div className="l">Election status</div><div className="v"><span className="pill muted" style={{ fontSize: 13 }}>Not configured</span></div></div>
           </div>
-        ))}
-      </div>
-      <button className="btn secondary" onClick={()=>nav('/')}>← Back</button>
-    </div>
+          <div className="card" style={{ maxWidth: 'none', padding: 20 }}>
+            {data.candidates.map(c => (
+              <div key={c.candidate_id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0' }}>
+                <div style={{ width: 170, fontSize: 14 }}>{c.name}<div className="hint" style={{ fontSize: 12 }}>{c.party}</div></div>
+                <div className="rbar" role="img" aria-label={`${c.name}: ${c.vote_count} votes`}><div style={{ width: `${(c.vote_count / max) * 100}%` }} /></div>
+                <div style={{ width: 36, textAlign: 'right', fontWeight: 700 }}>{c.vote_count}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </>
   )
 }

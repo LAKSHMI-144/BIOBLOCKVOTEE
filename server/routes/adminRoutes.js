@@ -25,7 +25,8 @@ router.post('/login', (req, res) => {
 router.get('/audit-logs', requireAdmin, async (req, res) => {
     try {
         const [rows] = await db.query("SELECT id, voter_id, action, timestamp FROM audit_log ORDER BY id DESC LIMIT 200");
-        res.json(rows);
+        // Ballot secrecy: the vote event stores the chosen candidate; never reveal who voted for whom.
+        res.json(rows.map(r => ({ ...r, action: r.action.startsWith('VOTED_FOR:') ? 'VOTED_FOR' : r.action })));
     } catch (e) {
         console.error('audit-logs error:', e.message);
         res.status(500).json({ success: false, message: 'Could not load audit logs' });
