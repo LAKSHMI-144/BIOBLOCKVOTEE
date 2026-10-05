@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PublicHeader from '../components/PublicHeader'
-import { useVoter } from '../voterSession'
+import { useVoter } from '../voterContext'
 
 export default function VoterLogin() {
   const nav = useNavigate()

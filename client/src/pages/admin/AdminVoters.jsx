@@ -1,5 +1,6 @@
 import { adminApi } from '../../api'
-import useLoad, { State } from '../../components/useLoad'
+import useLoad from '../../hooks/useLoad'
+import State from '../../components/State'
 
 const Yes = ({ v, yes = 'Yes', no = 'No' }) => <span className={`pill ${v ? 'ok' : 'muted'}`}>{v ? yes : no}</span>
 

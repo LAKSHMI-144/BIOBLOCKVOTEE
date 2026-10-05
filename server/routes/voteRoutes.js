@@ -12,11 +12,22 @@ router.post('/cast', async (req, res) => {
         if (voter[0].has_voted) return res.json({ success: false, message: "Already voted!" });
         const [candidate] = await db.query("SELECT * FROM candidates WHERE candidate_id = ?", [candidate_id]);
         if (candidate.length === 0) return res.json({ success: false, message: "Candidate not found" });
-        const blockRes = await ai.post('/add-to-blockchain', {
-            voter_id, candidate: candidate[0].name
-        });
-        if (blockRes.status !== 200 || !blockRes.data.success) return res.json({ success: false, message: "Could not record vote on blockchain" });
-        await db.query("UPDATE voters SET has_voted = TRUE WHERE voter_id = ?", [voter_id]);
+        // Atomically claim the voter's single vote. Only one concurrent request can flip
+        // has_voted FALSE -> TRUE, so parallel requests cannot create extra votes/blocks.
+        const [claim] = await db.query(
+            "UPDATE voters SET has_voted = TRUE WHERE voter_id = ? AND has_voted = FALSE", [voter_id]);
+        if (claim.affectedRows !== 1) return res.json({ success: false, message: "Already voted!" });
+        let blockRes;
+        try {
+            blockRes = await ai.post('/add-to-blockchain', { voter_id, candidate: candidate[0].name });
+        } catch (err) {
+            await db.query("UPDATE voters SET has_voted = FALSE WHERE voter_id = ?", [voter_id]);
+            throw err;
+        }
+        if (blockRes.status !== 200 || !blockRes.data.success) {
+            await db.query("UPDATE voters SET has_voted = FALSE WHERE voter_id = ?", [voter_id]);
+            return res.json({ success: false, message: "Could not record vote on blockchain" });
+        }
         await db.query("UPDATE candidates SET vote_count = vote_count + 1 WHERE candidate_id = ?", [candidate_id]);
         await db.query("INSERT INTO audit_log (voter_id, action) VALUES (?, ?)",
             [voter_id, `VOTED_FOR:${candidate[0].name}`]);

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { VoterProvider } from './voterSession'
+import VoterProvider from './VoterProvider'
 import Home from './pages/Home'
 import Register from './pages/Register'
 import Vote from './pages/Vote'

@@ -1,6 +1,6 @@
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Logo } from '../components/PublicHeader'
-import { useVoter } from '../voterSession'
+import { useVoter } from '../voterContext'
 
 export default function VoterDashboard() {
   const nav = useNavigate()

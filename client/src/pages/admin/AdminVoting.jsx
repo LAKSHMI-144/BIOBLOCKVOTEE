@@ -1,5 +1,6 @@
 import { adminApi } from '../../api'
-import useLoad, { State } from '../../components/useLoad'
+import useLoad from '../../hooks/useLoad'
+import State from '../../components/State'
 
 // Everything here comes from existing endpoints: /votes/results (totals) and /voters/all (per-voter status).
 export default function AdminVoting() {

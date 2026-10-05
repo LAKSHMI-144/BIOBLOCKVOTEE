@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { adminApi } from '../../api'
-import useLoad, { State } from '../../components/useLoad'
+import useLoad from '../../hooks/useLoad'
+import State from '../../components/State'
 
 const Stat = ({ l, v, s, children }) => (
   <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}>
