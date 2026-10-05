@@ -17,7 +17,7 @@ export default function AdminAudit() {
   return (
     <>
       <h1>Audit Logs</h1><p className="sub">Most recent 200 recorded events</p>
-      <p className="note">Failed authentication attempts, candidate changes, election changes and block creation are not recorded yet. The vote event never shows the chosen candidate.</p>
+      <p className="sub" style={{ marginTop: -16 }}>Not recorded: failed authentication, candidate / election changes, block creation.</p>
       <State loading={loading} error={error} />
       {data && (data.length === 0 ? <p className="empty">No events recorded yet.</p> : (
         <div className="tbl-wrap"><table className="tbl">

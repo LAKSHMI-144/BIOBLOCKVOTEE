@@ -3,13 +3,15 @@ import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
 import { Logo } from './PublicHeader'
 import { adminToken } from '../api'
 
-const LINKS = [
-  ['/admin', 'Dashboard', true],
-  ['/admin/candidates', 'Candidates'],
-  ['/admin/voters', 'Voters'],
-  ['/admin/audit', 'Audit Logs'],
-  ['/admin/blockchain', 'Blockchain'],
-  ['/admin/results', 'Results'],
+const GROUPS = [
+  [null, [['/admin', 'Dashboard', true]]],
+  ['Election', [['/admin/election', 'Election Details']]],
+  ['Candidates', [['/admin/candidates', 'View Candidates']]],
+  ['Voters', [['/admin/voters', 'Registered Voters']]],
+  ['Voting', [['/admin/voting', 'Votes & Progress']]],
+  ['Audit & Security', [['/admin/audit', 'Audit Logs']]],
+  ['Blockchain', [['/admin/blockchain', 'Chain & Integrity']]],
+  ['Results', [['/admin/results', 'Election Results']]],
 ]
 
 export default function AdminLayout() {
@@ -27,8 +29,13 @@ export default function AdminLayout() {
       <aside className={`bb-side ${open ? 'open' : ''}`}>
         <span className="bb-brand"><Logo /><span>BlockBioVote<small>Admin / Auditor</small></span></span>
         <nav aria-label="Admin">
-          {LINKS.map(([to, label, end]) => (
-            <NavLink key={to} to={to} end={end} onClick={() => setOpen(false)} className={({ isActive }) => isActive ? 'active' : ''}>{label}</NavLink>
+          {GROUPS.map(([title, links]) => (
+            <div key={title || 'top'}>
+              {title && <div className="grp">{title}</div>}
+              {links.map(([to, label, end]) => (
+                <NavLink key={to} to={to} end={end} onClick={() => setOpen(false)} className={({ isActive }) => isActive ? 'active' : ''}>{label}</NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <button className="lo" onClick={logout}>Log out</button>

@@ -11,7 +11,7 @@ export default function Blockchain() {
 
   return (
     <>
-      <h1>Blockchain</h1><p className="sub">Hash-linked vote records, maintained automatically by the application. Auditors monitor and verify; they do not create blocks.</p>
+      <h1>Blockchain</h1><p className="sub">Blocks are created automatically by the application; this page is for verification.</p>
       <State loading={loading} error={error} />
       {data && (
         <>
@@ -29,7 +29,7 @@ export default function Blockchain() {
               <div className="s"><code>{short(latest?.hash)}</code></div>
             </div>
           </div>
-          <p className="note">The chain is stored in memory only and resets if the AI service restarts. Each block stores a plain SHA-256 hash of the voter ID, so records are pseudonymous, not anonymous.</p>
+          <p className="note">Chain is held in memory (resets when the AI service restarts). Voter IDs appear only as SHA-256 hashes.</p>
           <div className="chain" role="list" aria-label="Blockchain blocks">
             {chain.map((b, i) => (
               <div key={b.index} style={{ display: 'flex' }} role="listitem">

@@ -66,6 +66,7 @@ code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;c
 .bb-side a,.bb-side button.lo{display:block;padding:9px 12px;border-radius:8px;color:var(--muted);font-size:14px;background:none;border:0;text-align:left;cursor:pointer}
 .bb-side a:hover,.bb-side button.lo:hover{background:var(--surface2);color:var(--text)}
 .bb-side a.active{background:var(--accent-dim);color:#c5ccff}
+.bb-side .grp{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#5d667a;padding:14px 12px 4px}
 .bb-main{flex:1;min-width:0;padding:32px}
 .bb-main h1{font-size:22px;letter-spacing:-.01em;margin-bottom:4px}.bb-main .sub{color:var(--muted);margin-bottom:24px;font-size:14px}
 .bb-topbar{display:none}

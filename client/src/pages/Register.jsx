@@ -3,7 +3,7 @@ import Webcam from 'react-webcam'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+import { API } from '../api'
 const MIN_IMAGES = 3
 const MAX_IMAGES = 5
 const PROMPTS = ['Look straight at the camera', 'Turn your head very slightly left', 'Turn your head very slightly right', 'Look straight again (optional)', 'Look straight again (optional)']

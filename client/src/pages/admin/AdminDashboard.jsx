@@ -32,7 +32,7 @@ export default function AdminDashboard() {
           </div>
           {mismatch && (
             <p className="note" style={{ marginTop: 20 }}>
-              The chain holds {bc.total_blocks - 1} vote block(s) but the database records {d.total_votes} vote(s). The chain is kept in memory and resets when the AI service restarts.
+              Mismatch: {bc.total_blocks - 1} vote block(s) on the chain vs {d.total_votes} vote(s) in the database.
             </p>
           )}
           <p className="hint" style={{ marginTop: 20, fontSize: 13 }}>

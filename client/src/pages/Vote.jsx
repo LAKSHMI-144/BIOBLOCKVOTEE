@@ -3,8 +3,7 @@ import Webcam from 'react-webcam'
 import axios from 'axios'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useVoter } from '../voterSession'
-
-const API = 'http://localhost:5000/api'
+import { API, errText } from '../api'
 
 // mode 'auth': face verification only, then on to the voter dashboard.
 // mode 'vote': candidate selection + confirmation (requires a verified voter).
@@ -27,7 +26,7 @@ export default function Vote({ mode = 'auth' }) {
     const img = webcamRef.current?.getScreenshot()
     if (!img) { setMsg('❌ Camera error'); return }
     setLoading(true); setMsg('🔍 Authenticating...')
-    const res = await axios.post(`${API}/voters/authenticate`, { face_image: img.split(',')[1] }).catch(()=>({data:{success:false,message:'Server error'}}))
+    const res = await axios.post(`${API}/voters/authenticate`, { face_image: img.split(',')[1] }).catch(e=>({data:{success:false,message:errText(e,'Server error')}}))
     if (res.data.success && pendingId && String(res.data.voter_id).toUpperCase() !== pendingId) {
       // Browser-side consistency check only; the server does not yet bind the entered ID to the face.
       setMsg('❌ The verified face does not match the Voter ID you entered.')
@@ -45,13 +44,13 @@ export default function Vote({ mode = 'auth' }) {
     if (!window.confirm(`Confirm vote for ${selected.split(':')[1]}?`)) return
     const [cand_id] = selected.split(':')
     setLoading(true)
-    const res = await axios.post(`${API}/votes/cast`, { voter_id: voter.id, candidate_id: parseInt(cand_id) }).catch(()=>({data:{success:false,message:'Server error'}}))
+    const res = await axios.post(`${API}/votes/cast`, { voter_id: voter.id, candidate_id: parseInt(cand_id) }).catch(e=>({data:{success:false,message:errText(e,'Server error')}}))
     if (res.data.success) { setReceipt(res.data); saveReceipt(res.data); setStep('done') }
     else setMsg('❌ ' + res.data.message)
     setLoading(false)
   }
 
-  if (mode === 'vote' && !voter) return <Navigate to="/voter/login" replace />
+  if ((mode === 'vote' && !voter) || (mode === 'auth' && !pendingId)) return <Navigate to="/voter/login" replace />
 
   return (
     <div className="page">

@@ -4,7 +4,8 @@ import PublicHeader from '../components/PublicHeader'
 const STEPS = [
   ['01', 'Register', 'A voter registers with their details and a short webcam capture. Only an encrypted face template is stored, never the photos.'],
   ['02', 'Verify', 'At voting time the webcam image is matched against registered voters. Only registered, eligible voters who have not yet voted proceed.'],
-  ['03', 'Vote & record', 'The vote is stored and appended as a SHA-256 hash-linked block that administrators can inspect and verify.'],
+  ['03', 'Vote', 'The verified voter selects a candidate and casts one vote; the server blocks a second vote.'],
+  ['04', 'Record', 'The vote is appended as a SHA-256 hash-linked block that administrators can inspect and verify.'],
 ]
 const IMPLEMENTED = [
   'Face detection and recognition (InsightFace / ArcFace embeddings)',
@@ -64,7 +65,7 @@ export default function Home() {
         <section className="bb-section" id="how">
           <div className="bb-wrap">
             <h2>How it works</h2>
-            <p className="sub">Three stages from registration to a verifiable record.</p>
+            <p className="sub">Four stages from registration to a verifiable record.</p>
             <div className="bb-grid">
               {STEPS.map(([n, t, d]) => (
                 <div className="card bb-tile" key={n} style={{ maxWidth: 'none', marginBottom: 0 }}>

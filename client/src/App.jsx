@@ -11,6 +11,8 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminCandidates from './pages/admin/AdminCandidates'
 import AdminVoters from './pages/admin/AdminVoters'
 import AdminAudit from './pages/admin/AdminAudit'
+import AdminVoting from './pages/admin/AdminVoting'
+import AdminElection from './pages/admin/AdminElection'
 import Results from './pages/Results'
 import Blockchain from './pages/Blockchain'
 
@@ -35,9 +37,13 @@ export default function App() {
             <Route path="candidates" element={<AdminCandidates />} />
             <Route path="voters" element={<AdminVoters />} />
             <Route path="audit" element={<AdminAudit />} />
+            <Route path="voting" element={<AdminVoting />} />
+            <Route path="election" element={<AdminElection />} />
             <Route path="blockchain" element={<Blockchain />} />
             <Route path="results" element={<Results />} />
           </Route>
+
+          <Route path="/admin/dashboard" element={<Navigate to="/admin" replace />} />
 
           {/* Old top-level routes now live inside the portals */}
           <Route path="/register" element={<Navigate to="/voter/register" replace />} />
