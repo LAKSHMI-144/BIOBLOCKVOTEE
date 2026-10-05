@@ -18,9 +18,16 @@ Node 18+, Python 3.10–3.12, MySQL 8 (or MariaDB 10.6+), a webcam.
 ## Setup
 
 ### 1. Database
+From the project root (`BLOCKCHAIN-SECURE-AI-VOTE`):
 ```
-mysql -u root -p < database/schema.sql
+mysql -u root -p < database/schema.sql          # macOS/Linux/cmd
+Get-Content database\schema.sql | mysql -u root -p   # PowerShell
 ```
+If your terminal is already inside the `database` folder, the file is `schema.sql` (not `database\schema.sql`):
+```
+Get-Content schema.sql | mysql -u root -p       # PowerShell
+```
+If `mysql` is not recognised, use its full path (e.g. `C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe`) or run `schema.sql` in MySQL Workbench / the VS Code MySQL panel.
 Upgrading an older database? Run `cd server && npm run migrate` (safe to run repeatedly).
 
 ### 2. Python AI service (port 5001)
@@ -100,3 +107,27 @@ cd server
 node scripts/hash-admin-password.js "a-strong-password-here"
 ```
 Easier: `cd server && npm run setup-admin -- "a-strong-password"` writes the three admin values into `server/.env` for you; then restart the server. If the login says "not configured", the message lists which variables are missing.
+
+## Environment variables
+| File | Variable | Meaning |
+|---|---|---|
+| `server/.env` | `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | MySQL connection (`DB_NAME=securevoteai`) |
+| `server/.env` | `PYTHON_AI_URL`, `INTERNAL_API_KEY` | AI service address; shared secret (same value in `python_ai/.env`) |
+| `server/.env` | `CORS_ORIGINS` | Allowed browser origins; any `localhost` port is also accepted outside production |
+| `server/.env` | `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_TOKEN_SECRET` | Created by `npm run setup-admin -- "<password>"` |
+| `python_ai/.env` | `DB_*`, `INTERNAL_API_KEY`, `FACE_ENCRYPTION_KEY` | Database, shared secret, key encrypting face templates |
+| `client/.env` (optional) | `VITE_API_BASE_URL` | Node server root, default `http://localhost:5000` |
+
+Real `.env` files are git-ignored. Only the `.env.example` files are committed - never paste real values into them.
+
+## Troubleshooting
+| Symptom | Cause / fix |
+|---|---|
+| `'vite' is not recognized` / `Cannot find module 'dotenv'` / `No module named 'mysql'` | Dependencies not installed: `npm install` in `client` and `server`; `pip install -r requirements.txt` in `python_ai` |
+| "Admin login is not configured" | Run `npm run setup-admin -- "<password>"` in `server`, then restart Node. The message names the missing variables. |
+| Admin pages show "Admin authentication required" | Token expired (2 h) - sign in again |
+| Frontend on port 5174 cannot reach the API | Fixed: any `localhost` port is allowed in development |
+| `/api/health` shows `ai_service: down` | Start `python app.py` in `python_ai` (first start downloads ~300 MB of models) |
+| `/api/health` shows `database: down` | MySQL not running, or `DB_PASSWORD` wrong in `server/.env` |
+| Camera does not start | Open the app at `http://localhost:5173` (not an IP address) and allow camera access |
+| Blockchain shows fewer blocks than votes | The chain is in memory and was reset by restarting the AI service |

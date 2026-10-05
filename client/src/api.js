@@ -1,7 +1,8 @@
 import axios from 'axios'
 
-export const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-export const AI_URL = import.meta.env.VITE_AI_URL || 'http://localhost:5001'
+// VITE_API_BASE_URL = Node server root (e.g. http://localhost:5000); '/api' is appended.
+const BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/+$/, '')
+export const API = `${BASE}/api`
 
 const TOKEN_KEY = 'bbv_admin_token'
 export const adminToken = {

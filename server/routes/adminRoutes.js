@@ -33,4 +33,15 @@ router.get('/audit-logs', requireAdmin, async (req, res) => {
     }
 });
 
+// Chain status for the admin Blockchain page (the Python service itself is not exposed to the browser).
+router.get('/blockchain', requireAdmin, async (req, res) => {
+    try {
+        const r = await require('../config/ai').get('/blockchain-status');
+        if (r.status !== 200) return res.status(502).json({ success: false, message: 'AI service returned an error' });
+        res.json(r.data);
+    } catch (e) {
+        res.status(503).json({ success: false, message: 'AI service is unavailable. Start python_ai (python app.py).' });
+    }
+});
+
 module.exports = router;

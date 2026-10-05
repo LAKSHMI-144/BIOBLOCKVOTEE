@@ -36,9 +36,8 @@ flowchart LR
   P -->|SQL: read/write face templates| M
   P --> F[InsightFace: detect + embed + match]
   P --> C[Blockchain chain in Python memory]
-  B -.->|Blockchain page reads directly| P
 ```
-Notes from the code: the Python service also connects to MySQL (to store and read encrypted face templates). The admin Blockchain page calls the Python service **directly** (`GET :5001/blockchain-status`), not through Node.
+Notes from the code: the Python service also connects to MySQL (to store and read encrypted face templates). The browser never talks to the Python service; the admin Blockchain page reads the chain through Node (`GET /api/admin/blockchain`).
 
 ## 6. Frontend (`client/src`)
 - `main.jsx` loads `App.css` and `theme.css` (dark design system). `App.jsx` holds all routes.
@@ -99,7 +98,7 @@ The Python routes `/check-face`, `/register-face`, `/authenticate`, `/add-to-blo
 `audit_log` receives: `REGISTERED`, `REGISTRATION_REJECTED:UNDERAGE`, `FACE_REGISTERED`, `FACE_REGISTRATION_FAILED:<reason>`, `AUTHENTICATED`, `DUPLICATE_ATTEMPT`, `VOTED_FOR:<candidate>`. The admin endpoint hides the candidate from the vote row. Failed authentication, candidate/election changes and block creation are not logged.
 
 ## 13. Admin authentication
-Credentials are only in `server/.env` (`ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` = scrypt, `ADMIN_TOKEN_SECRET`). `POST /api/admin/login` verifies the password and returns an HMAC-signed token valid for 2 hours; five wrong attempts per IP lock that IP for 15 minutes (in memory). Admin endpoints (`/api/admin/audit-logs`, `/api/voters/all`) require `Authorization: Bearer <token>` – enforced by the server, not just the UI. Create credentials with `npm run setup-admin -- "<password>"`.
+Credentials are only in `server/.env` (`ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` = scrypt, `ADMIN_TOKEN_SECRET`). `POST /api/admin/login` verifies the password and returns an HMAC-signed token valid for 2 hours; five wrong attempts per IP lock that IP for 15 minutes (in memory). Admin endpoints (`/api/admin/audit-logs`, `/api/admin/blockchain`, `/api/votes/results`, `/api/voters/all`) require `Authorization: Bearer <token>` – enforced by the server, not just the UI. Create credentials with `npm run setup-admin -- "<password>"`.
 
 ## 14. Security
 **Implemented:** encrypted face templates; no stored images; single-face/quality checks; duplicate-face detection; server-enforced single vote; hashed voter ID on chain; hash-chain integrity check; env-based secrets; internal key between Node and Python; scrypt admin password; signed expiring admin token; login rate limit; input validation and parameterised SQL.
@@ -135,14 +134,14 @@ Voter V001 registers details (`/voters/register`) → captures 3 images, each ch
 | Face login | React → `POST /api/voters/authenticate` → Python `/authenticate` (reads MySQL) |
 | Vote | React → `POST /api/votes/cast` → Python `/add-to-blockchain` → MySQL |
 | Admin login | React → `POST /api/admin/login` |
-| Admin data | React → `/api/voters/all`, `/api/admin/audit-logs` (token), `/api/votes/results`, `/api/votes/candidates` |
-| Blockchain page | React → Python `GET :5001/blockchain-status` |
+| Admin data (token required) | React → `/api/voters/all`, `/api/admin/audit-logs`, `/api/votes/results`, `/api/admin/blockchain` (Node → Python `/blockchain-status`) |
+| Candidate list (voters) | React → `GET /api/votes/candidates` (public) |
 
 ## 18. Current limitations (real, from the code)
 - No liveness detection: a printed photo could pass.
 - `POST /api/votes/cast` trusts the `voter_id` sent by the client; the Voter ID typed at login is only cross-checked in the browser.
 - Voting is not atomic: the block is added before the database update, so a failure in between leaves them inconsistent (the dashboard shows a mismatch warning).
-- The chain is in memory (lost on AI-service restart); `/blockchain-status`, `/api/votes/results` and `/api/votes/candidates` are public endpoints.
+- The chain is in memory (lost on AI-service restart). Results and chain status are admin-only; `/api/votes/candidates` is public (voters need it).
 - Voter hash is unsalted SHA-256 of the voter ID (pseudonymous, guessable for known IDs); `audit_log` stores `VOTED_FOR:<candidate>` next to the voter ID (hidden in the admin API but present in the database).
 - No election dates/status, no candidate add/edit/remove, no admin roles; admin login rate limit resets on server restart.
 - Voter session is in memory only (refresh = log in again).

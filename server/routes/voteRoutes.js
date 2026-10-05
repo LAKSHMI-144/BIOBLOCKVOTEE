@@ -1,10 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
 const db = require('../config/db');
 const ai = require('../config/ai');
-
-const PYTHON = process.env.PYTHON_AI_URL || 'http://localhost:5001';
+const requireAdmin = require('../middleware/requireAdmin');
 
 router.post('/cast', async (req, res) => {
     const { voter_id, candidate_id } = req.body;
@@ -39,11 +37,11 @@ router.get('/candidates', async (req, res) => {
     res.json(rows);
 });
 
-router.get('/results', async (req, res) => {
+router.get('/results', requireAdmin, async (req, res) => {
     const [candidates] = await db.query("SELECT * FROM candidates ORDER BY vote_count DESC");
     const [[{ total }]] = await db.query("SELECT COUNT(*) as total FROM voters WHERE has_voted = TRUE");
     const [[{ registered }]] = await db.query("SELECT COUNT(*) as registered FROM voters");
-    const blockRes = await axios.get(`${PYTHON}/blockchain-status`);
+    const blockRes = await ai.get('/blockchain-status');
     res.json({ candidates, total_votes: total, total_registered: registered, blockchain: blockRes.data });
 });
 

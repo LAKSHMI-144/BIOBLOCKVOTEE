@@ -7,18 +7,13 @@ const STEPS = [
   ['03', 'Vote', 'The verified voter selects a candidate and casts one vote; the server blocks a second vote.'],
   ['04', 'Record', 'The vote is appended as a SHA-256 hash-linked block that administrators can inspect and verify.'],
 ]
-const IMPLEMENTED = [
-  'Face detection and recognition (InsightFace / ArcFace embeddings)',
-  'Single-face and image-quality checks at registration; duplicate-face detection',
-  'Face templates encrypted at rest; no raw images stored',
-  'One vote per registered voter, enforced by the server',
-  'Hash-linked vote records with an integrity check',
-  'Admin login, with credentials held only in server configuration',
-]
-const PLANNED = [
-  'Liveness detection (a printed photo is not yet rejected)',
-  'Persistent blockchain (the chain currently resets if the AI service restarts)',
-  'Election scheduling and candidate management',
+const FEATURES = [
+  ['Face verification', 'Webcam face detection and recognition using ArcFace embeddings.'],
+  ['Protected biometrics', 'Face templates are stored encrypted; photos are never saved.'],
+  ['One voter, one vote', 'Enforced by the server for every registered voter.'],
+  ['Hash-linked records', 'Each vote is a SHA-256 block linked to the previous one.'],
+  ['Audit trail', 'Registration, authentication and voting events are logged.'],
+  ['Integrity check', 'Administrators can verify the chain at any time.'],
 ]
 
 export default function Home() {
@@ -79,17 +74,12 @@ export default function Home() {
 
         <section className="bb-section" id="security">
           <div className="bb-wrap">
-            <h2>Security status</h2>
-            <p className="sub">What this prototype does today, and what it does not yet do.</p>
+            <h2>Security &amp; features</h2>
+            <p className="sub">What the platform provides.</p>
             <div className="bb-grid">
-              <div className="card bb-tile" style={{ maxWidth: 'none', marginBottom: 0 }}>
-                <span className="pill ok">Implemented</span>
-                <ul className="bb-status">{IMPLEMENTED.map(x => <li key={x}>{x}</li>)}</ul>
-              </div>
-              <div className="card bb-tile" style={{ maxWidth: 'none', marginBottom: 0 }}>
-                <span className="pill warn">Not yet implemented</span>
-                <ul className="bb-status">{PLANNED.map(x => <li key={x}>{x}</li>)}</ul>
-              </div>
+              {FEATURES.map(([t, d]) => (
+                <div className="card bb-tile" key={t} style={{ maxWidth: 'none', marginBottom: 0 }}><h3>{t}</h3><p>{d}</p></div>
+              ))}
             </div>
           </div>
         </section>

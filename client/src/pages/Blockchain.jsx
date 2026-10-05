@@ -1,17 +1,18 @@
-import axios from 'axios'
-import { AI_URL } from '../api'
+import { adminApi } from '../api'
 import useLoad, { State } from '../components/useLoad'
 
 const short = h => (h ? h : '-')
 
 export default function Blockchain() {
-  const { data, error, loading } = useLoad(() => axios.get(`${AI_URL}/blockchain-status`))
+  const { data, error, loading, reload } = useLoad(() => adminApi.get('/admin/blockchain'))
   const chain = data?.chain || []
   const latest = chain[chain.length - 1]
 
   return (
     <>
-      <h1>Blockchain</h1><p className="sub">Blocks are created automatically by the application; this page is for verification.</p>
+      <h1>Blockchain</h1>
+      <p className="sub">Blocks are created automatically by the application; this page is for verification.
+        {' '}<button className="btn" style={{ padding: '4px 12px', marginLeft: 8 }} onClick={reload} disabled={loading}>{loading ? 'Verifying...' : 'Re-verify chain'}</button></p>
       <State loading={loading} error={error} />
       {data && (
         <>
