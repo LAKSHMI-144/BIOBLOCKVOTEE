@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import Webcam from 'react-webcam'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
@@ -11,7 +11,7 @@ const VIDEO = { width: 640, height: 480, facingMode: 'user' }
 
 // Pull the server's message out of an axios error (4xx/5xx JSON body) or explain a network failure.
 const errMsg = (e, fallback = 'Something went wrong') =>
-  e?.response?.data?.message || (e?.request ? 'Cannot reach the server. Is the backend running?' : fallback)
+  e?.response?.data?.message || (e?.request ? `Cannot reach the server at ${API}. Is the Node backend running?` : fallback)
 
 export default function Register() {
   const nav = useNavigate()
@@ -23,6 +23,10 @@ export default function Register() {
   const [msg, setMsg] = useState(null)            // { type: 'error' | 'success' | 'info', text }
   const [loading, setLoading] = useState(false)
   const set = (type, text) => setMsg({ type, text })
+  const msgRef = useRef(null)
+  // Make sure validation / server messages are actually seen (they used to sit below the card).
+  useEffect(() => { msgRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }) }, [msg])
+  const msgEl = msg ? <p ref={msgRef} className={`msg ${msg.type}`} role={msg.type === 'error' ? 'alert' : 'status'}>{msg.text}</p> : null
 
   const submitDetails = async () => {
     const v = { ...form, voter_id: form.voter_id.trim().toUpperCase(), name: form.name.trim() }
@@ -77,7 +81,7 @@ export default function Register() {
     <div className="page">
       <h2 className="title">👤 Voter Registration — Step {step}/2</h2>
       {step === 1 && (
-        <div className="card">
+        <form className="card" noValidate onSubmit={e => { e.preventDefault(); submitDetails() }}>
           {[['voter_id', 'Voter ID *', 'text'], ['name', 'Full Name *', 'text'], ['age', 'Age *', 'number'], ['address', 'Address', 'text']].map(([f, l, t]) => (
             <div key={f}>
               <label htmlFor={f}>{l}</label>
@@ -92,10 +96,11 @@ export default function Register() {
           </select>
           <p className="hint" style={{ textAlign: 'left' }}>Voters aged 18 or above are eligible to vote.</p>
           <div className="btn-row">
-            <button className="btn primary" onClick={submitDetails} disabled={loading}>{loading ? 'Saving...' : 'Next →'}</button>
-            <button className="btn secondary" onClick={() => nav('/voter/login')}>← Back</button>
+            <button type="submit" className="btn primary" disabled={loading}>{loading ? 'Saving...' : 'Next →'}</button>
+            <button type="button" className="btn secondary" onClick={() => nav('/voter/login')}>← Back</button>
           </div>
-        </div>
+          {msgEl}
+        </form>
       )}
       {step === 2 && (
         <div className="card center">
@@ -114,9 +119,9 @@ export default function Register() {
             <button className="btn secondary" onClick={() => { setImages([]); setMsg(null) }} disabled={loading || images.length === 0}>↺ Retake all</button>
             <button className="btn primary" onClick={submitFace} disabled={loading || images.length < MIN_IMAGES}>{loading ? 'Please wait...' : '✅ Register Face'}</button>
           </div>
+          {msgEl}
         </div>
       )}
-      {msg && <p className={`msg ${msg.type}`} role="status">{msg.text}</p>}
     </div>
   )
 }
