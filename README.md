@@ -10,6 +10,8 @@ React (Vite) :5173 ──► Node/Express :5000 ──► Python Flask AI :5001
                               └───────► MySQL ◄─────┘  blockchain.py (SHA-256 chain)
 ```
 
+Docs: [PROJECT_GUIDE.md](PROJECT_GUIDE.md) (how it works) · [DEMO_GUIDE.md](DEMO_GUIDE.md) (how to demo)
+
 ## Prerequisites
 Node 18+, Python 3.10–3.12, MySQL 8 (or MariaDB 10.6+), a webcam.
 
@@ -97,4 +99,4 @@ Credentials live only in `server/.env` (never in Git or React):
 cd server
 node scripts/hash-admin-password.js "a-strong-password-here"
 ```
-Paste the two printed lines (`ADMIN_PASSWORD_HASH`, `ADMIN_TOKEN_SECRET`) into `server/.env`, set `ADMIN_USERNAME`, and restart the server. Without these the admin login reports "not configured".
+Easier: `cd server && npm run setup-admin -- "a-strong-password"` writes the three admin values into `server/.env` for you; then restart the server. If the login says "not configured", the message lists which variables are missing.
