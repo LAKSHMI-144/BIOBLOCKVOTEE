@@ -1,6 +1,6 @@
 // Idempotent upgrade for databases created from an older schema.sql.
 //   cd server && npm run migrate
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const db = require('../config/db');
 
 const COLUMNS = [

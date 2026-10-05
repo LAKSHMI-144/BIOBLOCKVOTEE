@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const axios = require('axios');
 
 // Client for the Python AI service. Non-2xx responses are passed through

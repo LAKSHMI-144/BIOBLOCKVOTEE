@@ -3,7 +3,9 @@
 const crypto = require('crypto');
 const TTL_MS = 2 * 60 * 60 * 1000;
 
-const configured = () => !!(process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD_HASH && process.env.ADMIN_TOKEN_SECRET);
+const REQUIRED = ['ADMIN_USERNAME', 'ADMIN_PASSWORD_HASH', 'ADMIN_TOKEN_SECRET'];
+const missing = () => REQUIRED.filter(k => !process.env[k]);   // names only, never values
+const configured = () => missing().length === 0;
 const sha = s => crypto.createHash('sha256').update(String(s)).digest();
 
 function verifyPassword(password, stored) {           // stored = scrypt$<saltHex>$<hashHex>
@@ -31,4 +33,4 @@ function verifyToken(token) {
     if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) return false;
     try { return JSON.parse(Buffer.from(body, 'base64url')).exp > Date.now(); } catch { return false; }
 }
-module.exports = { configured, checkCredentials, signToken, verifyToken, TTL_MS };
+module.exports = { configured, missing, checkCredentials, signToken, verifyToken, TTL_MS };

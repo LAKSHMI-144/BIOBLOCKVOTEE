@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const requireAdmin = require('../middleware/requireAdmin');
-const { configured, checkCredentials, signToken, TTL_MS } = require('../config/adminAuth');
+const { configured, missing, checkCredentials, signToken, TTL_MS } = require('../config/adminAuth');
 
 // Basic brute-force protection: 5 failed logins per IP per 15 minutes.
 const fails = new Map();
@@ -10,7 +10,7 @@ const WINDOW = 15 * 60 * 1000;
 const recent = ip => (fails.get(ip) || []).filter(t => Date.now() - t < WINDOW);
 
 router.post('/login', (req, res) => {
-    if (!configured()) return res.status(503).json({ success: false, message: 'Admin login is not configured on the server' });
+    if (!configured()) return res.status(503).json({ success: false, message: `Admin login is not configured. Missing in server/.env: ${missing().join(', ')}. Run "npm run setup-admin -- <password>" in the server folder, then restart the server.` });
     if (recent(req.ip).length >= 5) return res.status(429).json({ success: false, message: 'Too many attempts. Try again later.' });
     const { username, password } = req.body || {};
     if (typeof username !== 'string' || typeof password !== 'string' || !checkCredentials(username, password)) {
