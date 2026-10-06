@@ -16,6 +16,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/voters', require('./routes/voterRoutes'));
 app.use('/api/votes', require('./routes/voteRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/identity', require('./routes/identityRoutes'));
+
+// Public, non-secret configuration the UI needs to decide which registration steps to show.
+app.get('/api/config', (req, res) => res.json({ identity: require('./services/identity').info() }));
 
 app.get('/', (req, res) => res.json({ message: 'BlockBioVote Server Running ✅' }));
 
@@ -38,8 +42,15 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+// Bring the schema up to date first (idempotent, never drops data), then accept requests.
+require('./config/schema')().then(done => {
+    if (done.length) console.log('🛠  Database schema updated:\n   ' + done.join('\n   '));
+}).catch(e => {
+    console.error(`❌ Database schema check failed: ${e.code || ''} ${e.message}\n   Check DB_* values in server/.env and that MySQL/MariaDB is running.`);
+}).finally(() => app.listen(PORT, () => {
     console.log(`✅ Server running on http://localhost:${PORT}`);
     const miss = adminAuth.missing();
     console.log(miss.length ? `⚠️  Admin login NOT configured - missing in server/.env: ${miss.join(', ')}  (fix: npm run setup-admin -- "your-password")` : '✅ Admin login configured');
-});
+    if (require('./config/tokens').usingEphemeral) console.log('ℹ️  SESSION_SECRET not set: voter/registration sessions reset when the server restarts.');
+    console.log(`ℹ️  Identity verification: mode=${process.env.IDENTITY_MODE || 'required'} provider=${process.env.IDENTITY_PROVIDER || 'mock'}`);
+}));

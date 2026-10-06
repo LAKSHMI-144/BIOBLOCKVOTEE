@@ -15,10 +15,10 @@
 
 ## Demo sequence (about 10 minutes)
 1. **Landing page** – explain the two portals and the 4 steps (Register, Verify, Vote, Record). Point at the "Security status" section: it honestly lists what is and is not done.
-2. **Register a voter** – Voter Login → "Register as a voter" → details (age ≥ 18) → capture 3 images. Mention each capture is checked (one face, quality) and only an encrypted template is stored.
+2. **Register a voter** – Voter Login → "Register as a voter" → details (age ≥ 18) → mobile number + OTP (demo mode: the on-screen banner says the OTP is the test value `123456`; no SMS is sent and nothing is really verified) → capture 3 images. Mention each capture is checked (one face, quality) and only an encrypted template is stored.
 3. **Show rejections** – try two people in frame (rejected), cover the camera (rejected), register the same face under a new ID (rejected as duplicate).
 4. **Face authentication** – Voter Login → enter the Voter ID → Authenticate. A different person is "not recognized".
-5. **Voter dashboard** – status, election info (not configured – say so), Cast My Vote.
+5. **Voter dashboard** – status and election info (voting is only possible while the election is ACTIVE: Admin → Election → "Open now" before the demo), Cast My Vote.
 6. **Cast vote** – choose a candidate → confirm → receipt (block index, hashes).
 7. **Try again** – log in again with the same face: "already voted".
 8. **Admin login** – Admin & Auditor Portal → `admin` + your password.

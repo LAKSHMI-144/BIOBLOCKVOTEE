@@ -5,8 +5,8 @@ import { adminToken } from '../api'
 
 const GROUPS = [
   [null, [['/admin', 'Dashboard', true]]],
-  ['Election', [['/admin/election', 'Election Details']]],
-  ['Candidates', [['/admin/candidates', 'View Candidates']]],
+  ['Election', [['/admin/election', 'Election Management']]],
+  ['Candidates', [['/admin/candidates', 'Manage Candidates']]],
   ['Voters', [['/admin/voters', 'Registered Voters']]],
   ['Voting', [['/admin/voting', 'Votes & Progress']]],
   ['Audit & Security', [['/admin/audit', 'Audit Logs']]],

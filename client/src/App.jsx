@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import VoterProvider from './VoterProvider'
+import I18nProvider from './i18n/I18nProvider'
 import Home from './pages/Home'
+import Info from './pages/Info'
 import Register from './pages/Register'
 import Vote from './pages/Vote'
 import VoterLogin from './pages/VoterLogin'
@@ -19,9 +21,11 @@ import Blockchain from './pages/Blockchain'
 export default function App() {
   return (
     <BrowserRouter>
-      <VoterProvider>
+      <I18nProvider><VoterProvider>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/how-it-works" element={<Info kind="how" />} />
+          <Route path="/security" element={<Info kind="security" />} />
 
           {/* Voter portal */}
           <Route path="/voter/login" element={<VoterLogin />} />
@@ -52,7 +56,7 @@ export default function App() {
           <Route path="/blockchain" element={<Navigate to="/admin/blockchain" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </VoterProvider>
+      </VoterProvider></I18nProvider>
     </BrowserRouter>
   )
 }

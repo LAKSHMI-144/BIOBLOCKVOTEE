@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { useT } from '../i18n/i18nContext'
+import LanguageSwitcher from './LanguageSwitcher'
 
 export function Logo() {
   return (
@@ -9,16 +11,20 @@ export function Logo() {
   )
 }
 
+// Public navigation. Admin is deliberately a small, muted link – not a portal card.
 export default function PublicHeader() {
+  const { t } = useT()
   return (
     <header className="bb-header">
       <div className="bb-wrap">
         <Link to="/" className="bb-brand"><Logo /><span>BlockBioVote<small>AI-Based Secure E-Voting System</small></span></Link>
         <nav className="bb-nav" aria-label="Main">
-          <Link to="/" className="hide-sm">Home</Link>
-          <a href="/#how" className="hide-sm">How It Works</a>
-          <a href="/#security" className="hide-sm">Security</a>
-          <a href="/#portals" className="btn primary" style={{ padding: '8px 16px' }}>Login</a>
+          <Link to="/" className="hide-sm">{t('nav.home')}</Link>
+          <Link to="/how-it-works" className="hide-sm">{t('nav.how')}</Link>
+          <Link to="/security" className="hide-sm">{t('nav.security')}</Link>
+          <LanguageSwitcher />
+          <Link to="/voter/login" className="btn primary" style={{ padding: '8px 16px' }}>{t('nav.voterLogin')}</Link>
+          <Link to="/admin/login" className="nav-admin">{t('nav.admin')}</Link>
         </nav>
       </div>
     </header>

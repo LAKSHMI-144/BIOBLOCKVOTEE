@@ -128,23 +128,24 @@ Voter V001 registers details (`/voters/register`) → captures 3 images, each ch
 ## 17. How components communicate
 | Step | Call |
 |---|---|
-| Register details | React → `POST /api/voters/register` → MySQL |
+| Register details | React → `POST /api/voters/register` → MySQL (returns a registration ticket) |
+| Identity / OTP (mock provider) | React → `POST /api/identity/start`, `/send-otp`, `/verify-otp` (ticket required) |
 | Per-capture check | React → `POST /api/voters/check-face` → Python `/check-face` |
-| Save face | React → `POST /api/voters/register-face` → Python `/register-face` → MySQL |
-| Face login | React → `POST /api/voters/authenticate` → Python `/authenticate` (reads MySQL) |
-| Vote | React → `POST /api/votes/cast` → Python `/add-to-blockchain` → MySQL |
+| Save face | React → `POST /api/voters/register-face` (ticket + verified identity) → Python `/register-face` → MySQL |
+| Face login | React → `POST /api/voters/authenticate` (face + Voter ID) → Python `/authenticate` → returns a 15-minute voter session token |
+| Vote | React → `POST /api/votes/cast` (Bearer voter token; voter comes from the token) → election must be ACTIVE → atomic `has_voted` claim → Python `/add-to-blockchain` → MySQL |
+| Election / candidates | Public: `GET /api/votes/election`, `GET /api/votes/candidates`. Admin: `/api/admin/election`, `/api/admin/candidates` |
 | Admin login | React → `POST /api/admin/login` |
-| Admin data (token required) | React → `/api/voters/all`, `/api/admin/audit-logs`, `/api/votes/results`, `/api/admin/blockchain` (Node → Python `/blockchain-status`) |
-| Candidate list (voters) | React → `GET /api/votes/candidates` (public) |
+| Admin data (token required) | React → `/api/voters/all`, `/api/admin/audit-logs`, `/api/votes/results`, `/api/admin/blockchain` (Node → Python `/blockchain-status`), `/api/admin/security` |
 
 ## 18. Current limitations (real, from the code)
 - No liveness detection: a printed photo could pass.
-- `POST /api/votes/cast` trusts the `voter_id` sent by the client; the Voter ID typed at login is only cross-checked in the browser.
-- Voting is not atomic: the block is added before the database update, so a failure in between leaves them inconsistent (the dashboard shows a mismatch warning).
-- The chain is in memory (lost on AI-service restart). Results and chain status are admin-only; `/api/votes/candidates` is public (voters need it).
-- Voter hash is unsalted SHA-256 of the voter ID (pseudonymous, guessable for known IDs); `audit_log` stores `VOTED_FOR:<candidate>` next to the voter ID (hidden in the admin API but present in the database).
-- No election dates/status, no candidate add/edit/remove, no admin roles; admin login rate limit resets on server restart.
-- Voter session is in memory only (refresh = log in again).
+- The voter session token lives in browser memory (refresh = log in again). Tokens are signed with `SESSION_SECRET`.
+- Vote casting claims `has_voted` atomically (parallel requests cannot double-vote), but the block write and the `vote_count` increment are still separate steps: a crash between them could leave a block without a count.
+- The chain is in memory (lost on AI-service restart; persistence NOT implemented). Results and chain status are admin-only; `/api/votes/candidates` is public without tallies.
+- Voter hash is unsalted SHA-256 of the voter ID (pseudonymous, guessable for known IDs). The audit log no longer records the chosen candidate next to the voter ID.
+- Identity verification is a mock "Development / Demo Verification" (fixed OTP, no SMS, no real identity check). Real Aadhaar/government verification is NOT implemented.
+- One admin account, no roles; admin and other rate limits reset on server restart.
 
 ## 19. Future enhancements
-Liveness detection; server-issued voter token and 1:1 face verification; transactional voting; persisted and salted chain; election management and candidate CRUD; logging of failed authentication and admin actions; HTTPS and deployment hardening.
+Liveness detection; persisted and salted chain; a real, authorised identity provider; admin roles; logging of failed authentication; HTTPS and deployment hardening.

@@ -12,11 +12,11 @@ export default function AdminVoters() {
       <State loading={loading} error={error} />
       {data && (data.length === 0 ? <p className="empty">No voters registered yet.</p> : (
         <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Voter ID</th><th>Name</th><th>Age</th><th>Eligible</th><th>Face registered</th><th>Voted</th><th>Registered</th></tr></thead>
+          <thead><tr><th>Voter ID</th><th>Name</th><th>Age</th><th>Eligible</th><th>Identity (OTP)</th><th>Face registered</th><th>Voted</th><th>Registered</th></tr></thead>
           <tbody>{data.map(v => (
             <tr key={v.voter_id}>
               <td>{v.voter_id}</td><td>{v.name}</td><td>{v.age}</td>
-              <td><Yes v={v.is_eligible} /></td><td><Yes v={v.face_registered} /></td><td><Yes v={v.has_voted} /></td>
+              <td><Yes v={v.is_eligible} /></td><td><Yes v={v.identity_status === 'VERIFIED'} yes="Verified" no={v.identity_status === 'NOT_STARTED' ? 'Not started' : v.identity_status.toLowerCase()} /></td><td><Yes v={v.face_registered} /></td><td><Yes v={v.has_voted} /></td>
               <td>{new Date(v.registered_at).toLocaleDateString()}</td>
             </tr>
           ))}</tbody>

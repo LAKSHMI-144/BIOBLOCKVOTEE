@@ -25,3 +25,25 @@ adminApi.interceptors.response.use(r => r, e => {
 
 export const errText = (e, fallback = 'Something went wrong') =>
   e?.response?.data?.message || (e?.request ? 'Cannot reach the server. Is the backend running?' : fallback)
+
+// ---- Voter-side helpers -------------------------------------------------------------------
+// Registration ticket from /voters/register (kept for this browser tab only).
+const REG_KEY = 'bbv_reg_token'
+export const regToken = {
+  get: () => sessionStorage.getItem(REG_KEY),
+  set: t => sessionStorage.setItem(REG_KEY, t),
+  clear: () => sessionStorage.removeItem(REG_KEY),
+}
+export const bearer = tok => (tok ? { headers: { Authorization: `Bearer ${tok}` } } : {})
+
+// Turns any axios error into { message, code, status, fields } for display.
+// Known codes are translated; otherwise the backend's (safe) message; otherwise a generic per-status text.
+export function apiError(e, t) {
+  const tr = k => { const s = t(k); return s === k ? null : s }
+  if (!e?.response) return { message: tr('err.network') || errText(e), code: 'NETWORK', status: 0, fields: {} }
+  const { status, data = {} } = e.response
+  const fields = {}
+  for (const [f, v] of Object.entries(data.errors || {})) fields[f] = tr(`err.${v.code}`) || v.message
+  const message = (data.code && tr(`err.${data.code}`)) || data.message || tr(`err.http.${status}`) || tr('err.http.500')
+  return { message, code: data.code, status, fields, retryAfter: data.retry_after }
+}
