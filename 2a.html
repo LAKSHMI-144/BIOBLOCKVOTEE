@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<head>
+<title>Time Table</title>
+<style>
+body {
+font-family: Arial, sans-serif;
+background-color: #222;
+}
+table {
+width: 90%;
+border-collapse: collapse; 
+margin: 20px auto;
+}
+caption {
+font-size: 24px; 
+font-weight: bold; 
+margin: 10px;
+color: white;
+}
+th, td {
+border: 1px solid #555; 
+padding: 10px;
+text-align: center;
+color: white;
+}
+thead {
+background-color: #111; 
+color: white;
+}
+tfoot {
+background-color: #333; 
+font-style: italic;
+}
+/* Row colors */ 
+tr:nth-child(even) {
+background-color: #444;
+}
+tr:nth-child(odd) { 
+background-color: #333;
+}
+/* Lab and Elective colors */
+.lab {
+background-color: #7b1e1e; 
+font-weight: bold;
+}
+.elective {
+background-color: #4a235a; 
+font-weight: bold;
+}
+</style>
+</head>
+<body>
+<table>
+<caption>Time Table</caption>
+<thead>
+<tr>
+<th>Day</th>
+<th>09.00-10.00</th>
+<th>10.00-11.00</th>
+<th>11.00-11.15</th>
+<th>11.15-12.15</th>
+<th>12.15-01.15</th>
+<th>01.15-02.05</th>
+<th>02.00-03.00</th>
+<th>03.00-04.00</th>
+<th>04.00-05.00</th>
+</tr>
+</thead>
+<tfoot>
+<tr>
+</tr>
+</tfoot>
+<tbody>
+<tr>
+<td>Monday</td>
+<td colspan="2" class="lab">CN Lab</td>
+<td rowspan="6">TEA BREAK</td>
+<td class="elective">AI</td>
+<td>SE&PM</td>
+<td rowspan="6">LUNCH BREAK</td>
+<td>TOC(T)</td>
+<td colspan="2">Student Counseling</td>
+</tr>
+<tr>
+<td>Tuesday</td>
+<td>RM</td>
+<td>TOC</td>
+<td class="elective">AI</td>
+<td>CN</td>
+<td colspan="2" class="lab">WEB Lab</td>
+<td>Library</td>
+</tr>
+<tr>
+<td>Wednesday</td>
+<td class="elective">AI</td>
+<td>SE&PM</td>
+<td>TOC</td>
+<td>CN</td>
+<td colspan="3">Dept. Activity</td>
+</tr>
+<tr>
+<td>Thursday</td>
+<td>TOC</td>
+<td>CN</td>
+<td>RM</td>
+<td>Library</td>
+<td colspan="3" class="lab">MINI PROJECT</td>
+</tr>
+<tr>
+<td>Friday</td>
+<td>TOC</td>
+<td>RM</td>
+<td>SE&PM</td>
+<td>ES</td>
+<td>ES</td>
+<td colspan="2">Library</td>
+</tr>
+<tr>
+<td>Saturday</td>
+<td>SE&PM(T)</td>
+<td>TOC(T)</td>
+<td>RM(T)</td>
+<td>Dept. Activity</td>
+<td colspan="3">Physical Education</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

@@ -16,9 +16,9 @@ export default function PublicHeader() {
         <Link to="/" className="bb-brand"><Logo /><span>BlockBioVote<small>AI-Based Secure E-Voting System</small></span></Link>
         <nav className="bb-nav" aria-label="Main">
           <Link to="/" className="hide-sm">Home</Link>
-          <a href="/#how" className="hide-sm">How It Works</a>
-          <a href="/#security" className="hide-sm">Security</a>
-          <a href="/#portals" className="btn primary" style={{ padding: '8px 16px' }}>Login</a>
+          <Link to="/voter/login" className="btn primary" style={{ padding: '8px 16px' }}>Login</Link>
+          <Link to="/voter/register" className="btn secondary" style={{ padding: '8px 16px' }}>Register</Link>
+          <Link to="/admin/login" className="bb-admin-link">Admin Login</Link>
         </nav>
       </div>
     </header>

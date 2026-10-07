@@ -53,10 +53,28 @@ router.post('/register', async (req, res) => {
             throw e;
         }
         await audit(voter_id, 'REGISTERED');
-        res.json({ success: true, voter_id, message: `Voter ${name} registered. Now capture the face.` });
+        return res.json({ success: true, voter_id, message: `Voter ${name} registered. Now capture the face.` });
     } catch (e) {
-        console.error('register error:', e);
-        fail(res, 500, "Registration failed. Please try again.");
+        console.error('register error:', e.message, e.code);
+        // Distinguish between different types of errors
+        if (e.code === 'ER_BAD_DB_ERROR') {
+            return fail(res, 503, "Database is not initialized. Please run 'npm run setup-db' or initialize schema.sql manually.");
+        }
+        if (e.code === 'ER_NO_SUCH_TABLE' || e.message?.includes("doesn't exist")) {
+            return fail(res, 503, "Database tables are not initialized. Admin: run 'npm run setup-db' to initialize the database.");
+        }
+        if (e.code === 'PROTOCOL_CONNECTION_LOST' || e.code === 'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR' || e.code === 'ECONNREFUSED') {
+            return fail(res, 503, "Cannot connect to database. Ensure MySQL is running and credentials are correct.");
+        }
+        if (e.code === 'ER_ACCESS_DENIED_ERROR') {
+            return fail(res, 503, "Database authentication failed. Check DB_USER and DB_PASSWORD in server/.env");
+        }
+        // Generic database error
+        if (e.message?.includes('database') || e.message?.includes('SQL')) {
+            return fail(res, 503, "Database error: " + (e.message || "Unknown database error"));
+        }
+        // Fallback for unexpected errors
+        return fail(res, 500, "Registration failed. Please try again. " + (process.env.NODE_ENV === 'development' ? `(${e.message})` : ""));
     }
 });
 
@@ -92,8 +110,17 @@ router.post('/register-face', async (req, res) => {
         else if (r.data && r.data.code) await audit(voter_id, `FACE_REGISTRATION_FAILED:${r.data.code}`);
         res.status(r.status).json(r.data);
     } catch (e) {
-        console.error('register-face error:', e.message);
-        fail(res, 503, "Face service is unavailable. Please try again shortly.");
+        console.error('register-face error:', e.message || e);
+        if (e.code === 'ER_NO_SUCH_TABLE' || e.message?.includes("doesn't exist")) {
+            return fail(res, 503, "Database is not properly initialized. Run 'npm run setup-db' to initialize.");
+        }
+        if (e.code === 'ECONNREFUSED' || e.message?.includes('Cannot connect')) {
+            return fail(res, 503, "AI face service is unavailable. Ensure the Python AI service is running on port 5001.");
+        }
+        if (e.message?.includes('ENOTFOUND') || e.message?.includes('connect')) {
+            return fail(res, 503, "Cannot reach AI service. Check that it's running at PYTHON_AI_URL in .env");
+        }
+        return fail(res, 503, "Face registration service error. Please try again shortly.");
     }
 });
 
