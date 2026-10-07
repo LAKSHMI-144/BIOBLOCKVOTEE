@@ -38,11 +38,18 @@ router.get('/candidates', async (req, res) => {
 });
 
 router.get('/results', requireAdmin, async (req, res) => {
-    const [candidates] = await db.query("SELECT * FROM candidates ORDER BY vote_count DESC");
-    const [[{ total }]] = await db.query("SELECT COUNT(*) as total FROM voters WHERE has_voted = TRUE");
-    const [[{ registered }]] = await db.query("SELECT COUNT(*) as registered FROM voters");
-    const blockRes = await ai.get('/blockchain-status');
-    res.json({ candidates, total_votes: total, total_registered: registered, blockchain: blockRes.data });
+    try {
+        const [candidates] = await db.query("SELECT * FROM candidates ORDER BY vote_count DESC");
+        const [[{ total }]] = await db.query("SELECT COUNT(*) as total FROM voters WHERE has_voted = TRUE");
+        const [[{ registered }]] = await db.query("SELECT COUNT(*) as registered FROM voters");
+        // The chain lives in the AI service; if it is down, still return the database results (blockchain: null).
+        let blockchain = null;
+        try { const b = await ai.get('/blockchain-status'); if (b.status === 200) blockchain = b.data; } catch (e) { console.error('blockchain-status unavailable:', e.message); }
+        res.json({ candidates, total_votes: total, total_registered: registered, blockchain });
+    } catch (e) {
+        console.error('results error:', e.message);
+        res.status(500).json({ success: false, message: 'Could not load results' });
+    }
 });
 
 module.exports = router;

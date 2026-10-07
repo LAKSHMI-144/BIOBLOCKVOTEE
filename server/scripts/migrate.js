@@ -5,7 +5,10 @@ const db = require('../config/db');
 
 const COLUMNS = [
     ['voters', 'is_eligible', 'BOOLEAN NOT NULL DEFAULT TRUE'],
-    ['voters', 'face_registered_at', 'TIMESTAMP NULL']
+    ['voters', 'face_registered_at', 'TIMESTAMP NULL'],
+    // Used by the admin candidate API (/api/admin/candidates)
+    ['candidates', 'position', 'VARCHAR(100) NULL'],
+    ['candidates', 'status', "VARCHAR(20) NOT NULL DEFAULT 'Active'"]
 ];
 
 (async () => {

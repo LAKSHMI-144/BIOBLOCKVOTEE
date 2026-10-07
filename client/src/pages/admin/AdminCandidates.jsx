@@ -1,5 +1,6 @@
 import { adminApi } from '../../api'
-import useLoad, { State } from '../../components/useLoad'
+import useLoad from '../../hooks/useLoad'
+import State from '../../components/State'
 
 export default function AdminCandidates() {
   const { data, error, loading } = useLoad(() => adminApi.get('/votes/candidates'))

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Webcam from 'react-webcam'
 import axios from 'axios'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { useVoter } from '../voterSession'
+import { useVoter } from '../voterContext'
 import { API, errText } from '../api'
 
 // mode 'auth': face verification only, then on to the voter dashboard.

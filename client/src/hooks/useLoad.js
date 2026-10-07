@@ -14,6 +14,3 @@ export default function useLoad(fetcher) {
   }, [n]) // eslint-disable-line react-hooks/exhaustive-deps
   return { ...s, reload: () => setN(x => x + 1) }
 }
-
-export const State = ({ loading, error }) =>
-  loading ? <p className="empty">Loading...</p> : error ? <p className="msg error" role="alert" style={{ textAlign: 'left' }}>{error}</p> : null

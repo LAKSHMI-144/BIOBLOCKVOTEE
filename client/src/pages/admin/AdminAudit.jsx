@@ -1,5 +1,6 @@
 import { adminApi } from '../../api'
-import useLoad, { State } from '../../components/useLoad'
+import useLoad from '../../hooks/useLoad'
+import State from '../../components/State'
 
 const EVENTS = {
   REGISTERED: ['Voter registration', true],

@@ -1,5 +1,6 @@
 import { adminApi } from '../../api'
-import useLoad, { State } from '../../components/useLoad'
+import useLoad from '../../hooks/useLoad'
+import State from '../../components/State'
 
 // Everything here comes from existing endpoints: /votes/results (totals) and /voters/all (per-voter status).
 export default function AdminVoting() {
@@ -10,20 +11,26 @@ export default function AdminVoting() {
   const voted = voters ? voters.filter(v => v.has_voted) : []
 
   return (
-    <>
-      <h1>Voting</h1><p className="sub">Votes cast and election progress</p>
+    <div className="bb-page-shell">
+      <header className="bb-page-header">
+        <div>
+          <div className="bb-page-kicker">Voters</div>
+          <h1>Voting progress</h1>
+          <p className="bb-page-subtitle">Votes cast and turnout, from the voter register.</p>
+        </div>
+      </header>
       <State loading={res.loading || vot.loading} error={res.error || vot.error} />
       {r && voters && (
         <>
-          <div className="bb-grid" style={{ marginBottom: 20 }}>
-            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}><div className="l">Votes cast</div><div className="v">{r.total_votes}</div></div>
-            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}><div className="l">Yet to vote</div><div className="v">{r.total_registered - r.total_votes}</div></div>
-            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}>
+          <div className="bb-grid">
+            <div className="bb-stat"><div className="l">Votes cast</div><div className="v">{r.total_votes}</div></div>
+            <div className="bb-stat"><div className="l">Yet to vote</div><div className="v">{r.total_registered - r.total_votes}</div></div>
+            <div className="bb-stat">
               <div className="l">Progress</div><div className="v">{pct}%</div>
               <div className="rbar" style={{ marginTop: 10 }} role="img" aria-label={`${pct}% turnout`}><div style={{ width: `${pct}%` }} /></div>
             </div>
           </div>
-          <h3 style={{ fontSize: 15, margin: '0 0 10px' }}>Voters who have voted</h3>
+          <h3 className="bb-subhead">Voters who have voted</h3>
           {voted.length === 0 ? <p className="empty">No votes cast yet.</p> : (
             <div className="tbl-wrap"><table className="tbl">
               <thead><tr><th>Voter ID</th><th>Name</th></tr></thead>
@@ -32,6 +39,6 @@ export default function AdminVoting() {
           )}
         </>
       )}
-    </>
+    </div>
   )
 }

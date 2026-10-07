@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS candidates (
     name VARCHAR(100) NOT NULL,
     party VARCHAR(100) NOT NULL,
     symbol VARCHAR(10),
+    position VARCHAR(100) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'Active',
     vote_count INT DEFAULT 0
 );
 

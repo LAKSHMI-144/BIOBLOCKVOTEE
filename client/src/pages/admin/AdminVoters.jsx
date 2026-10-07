@@ -1,5 +1,6 @@
 import { adminApi } from '../../api'
-import useLoad, { State } from '../../components/useLoad'
+import useLoad from '../../hooks/useLoad'
+import State from '../../components/State'
 
 const badge = (value, success = 'Verified', failure = 'Pending') => (
   <span className={`bb-badge ${value ? 'success' : 'muted'}`}>{value ? success : failure}</span>

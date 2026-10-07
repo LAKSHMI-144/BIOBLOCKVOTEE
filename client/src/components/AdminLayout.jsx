@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Logo } from './PublicHeader'
 import { adminToken } from '../api'
 
@@ -13,7 +13,10 @@ const NAV = [
 
 export default function AdminLayout() {
   const nav = useNavigate()
+  const pathname = useLocation().pathname.replace(/(.)\/+$/, "$1")
   const [open, setOpen] = useState(false)
+
+  const current = NAV.flatMap(g => g.links).find(l => (l.end ? pathname === l.to : pathname.startsWith(l.to)))
 
   if (!adminToken.get()) return <Navigate to="/admin/login" replace />
 
@@ -61,7 +64,7 @@ export default function AdminLayout() {
             <button className="bb-menu-btn" aria-label="Open menu" onClick={() => setOpen(!open)}>☰</button>
             <div>
               <div className="bb-topbar-kicker">Administration</div>
-              <h1>Election Command Center</h1>
+              <div className="bb-topbar-title">{current ? current.label : 'Admin'}</div>
             </div>
           </div>
           <div className="bb-topbar-user">

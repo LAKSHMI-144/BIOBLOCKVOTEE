@@ -1,5 +1,6 @@
 import { adminApi } from '../api'
-import useLoad, { State } from '../components/useLoad'
+import useLoad from '../hooks/useLoad'
+import State from '../components/State'
 
 const palette = ['#6d7cff', '#8a6df6', '#2ec27e', '#f0b75a', '#ff6b7a', '#5ad1ff', '#49c6b4']
 

@@ -1,5 +1,6 @@
 import { adminApi } from '../api'
-import useLoad, { State } from '../components/useLoad'
+import useLoad from '../hooks/useLoad'
+import State from '../components/State'
 
 const short = h => (h ? h : '-')
 
@@ -9,23 +10,28 @@ export default function Blockchain() {
   const latest = chain[chain.length - 1]
 
   return (
-    <>
-      <h1>Blockchain</h1>
-      <p className="sub">Blocks are created automatically by the application; this page is for verification.
-        {' '}<button className="btn" style={{ padding: '4px 12px', marginLeft: 8 }} onClick={reload} disabled={loading}>{loading ? 'Verifying...' : 'Re-verify chain'}</button></p>
+    <div className="bb-page-shell">
+      <header className="bb-page-header">
+        <div>
+          <div className="bb-page-kicker">Security</div>
+          <h1>Blockchain</h1>
+          <p className="bb-page-subtitle">Blocks are created automatically by the application; this page is for verification.</p>
+        </div>
+        <button type="button" className="bb-button" onClick={reload} disabled={loading}>{loading ? 'Verifying…' : 'Re-verify chain'}</button>
+      </header>
       <State loading={loading} error={error} />
       {data && (
         <>
-          <div className="bb-grid" style={{ marginBottom: 20 }}>
-            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}>
+          <div className="bb-grid">
+            <div className="bb-stat">
               <div className="l">Chain integrity</div>
               <div className="v"><span className={`pill ${data.is_valid ? 'ok' : 'bad'}`} style={{ fontSize: 14 }}>{data.is_valid ? 'VALID' : 'INVALID - tampering detected'}</span></div>
               <div className="s">Recomputed from every block on load</div>
             </div>
-            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}>
+            <div className="bb-stat">
               <div className="l">Total blocks</div><div className="v">{data.total_blocks}</div><div className="s">Including the genesis block</div>
             </div>
-            <div className="card bb-stat" style={{ maxWidth: 'none', marginBottom: 0 }}>
+            <div className="bb-stat">
               <div className="l">Latest block</div><div className="v">#{latest?.index}</div>
               <div className="s"><code>{short(latest?.hash)}</code></div>
             </div>
@@ -48,6 +54,6 @@ export default function Blockchain() {
           </div>
         </>
       )}
-    </>
+    </div>
   )
 }
