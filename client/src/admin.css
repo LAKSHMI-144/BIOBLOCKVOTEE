@@ -1,0 +1,232 @@
+/* Admin / auditor portal design system.
+   Loaded after theme.css (see main.jsx). Everything is scoped to .bb-admin-shell so the public
+   and voter pages are untouched. Flat dark surfaces, one accent, small radii, no glow.
+   Defines every bb-* class the admin pages use; run `npm run check:css` to confirm none are missing. */
+
+.bb-admin-shell {
+  --bg: #0a0e15;
+  --surface: #111821;
+  --surface2: #161f2b;
+  --border: #223041;
+  --text: #e6ebf3;
+  --muted: #8b9ab0;
+  --accent: #6b7bd6;
+  --ok: #3fae7c;
+  --warn: #d8a24f;
+  --bad: #d86b78;
+  --r: 8px;
+  background: var(--bg);
+  font-size: 14px;
+}
+
+/* ---------- shell: flatten theme.css gradients ---------- */
+.bb-admin-shell .bb-admin-sidebar { background: #0d131c; border-right: 1px solid var(--border); width: 248px; }
+.bb-admin-shell .bb-brand-mark { background: rgba(107, 123, 214, .14); border: 1px solid rgba(107, 123, 214, .3); border-radius: 8px; }
+.bb-admin-shell .bb-brand-name { font-size: 17px; }
+.bb-admin-shell .bb-nav-item { font-size: 14px; padding: 9px 12px; border-radius: 6px; color: #c3cddb; }
+.bb-admin-shell .bb-nav-item:hover { background: rgba(255, 255, 255, .04); border-color: transparent; color: var(--text); }
+.bb-admin-shell .bb-nav-item.active { background: rgba(107, 123, 214, .14); border-color: transparent; box-shadow: inset 2px 0 0 var(--accent); color: #fff; }
+.bb-admin-shell .bb-logout { background: transparent; border-radius: 6px; color: #c3cddb; }
+.bb-admin-shell .bb-logout:hover { background: rgba(255, 255, 255, .04); color: #fff; }
+.bb-admin-shell .bb-admin-topbar { background: #0d131c; padding: 12px 24px; }
+.bb-admin-shell .bb-topbar-title { font-size: 16px; font-weight: 600; margin-top: 2px; }
+.bb-admin-shell .bb-topbar-user { border-radius: 8px; background: var(--surface); }
+.bb-admin-shell .bb-user-badge { background: var(--accent); }
+.bb-admin-shell .bb-admin-main { padding: 24px; max-width: 1360px; }
+.bb-overlay { position: fixed; inset: 0; z-index: 25; border: 0; background: rgba(0, 0, 0, .55); cursor: pointer; }
+
+/* ---------- page header (every admin page) ---------- */
+.bb-admin-shell .bb-page-shell,
+.bb-dashboard-shell { display: flex; flex-direction: column; gap: 16px; }
+.bb-admin-shell .bb-page-header { padding: 0 0 4px; align-items: flex-end; }
+.bb-admin-shell .bb-page-header h1 { font-size: 24px; letter-spacing: -.02em; }
+.bb-admin-shell .bb-page-kicker, .bb-kicker { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.bb-admin-shell .bb-page-subtitle, .bb-dashboard-subtitle { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.bb-subhead { font-size: 14px; font-weight: 600; margin: 8px 0 10px; }
+.bb-dashboard-title { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+.bb-header-strip { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.bb-header-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bb-mini-tag { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- buttons ---------- */
+.bb-admin-shell .bb-button, .bb-admin-shell .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transform: none; transition: background .12s, border-color .12s;
+}
+.bb-admin-shell .bb-button:hover:not(:disabled), .bb-admin-shell .btn:hover:not(:disabled) { background: #1c2735; border-color: #31445a; transform: none; }
+.bb-admin-shell .bb-button.primary, .bb-admin-shell .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.bb-admin-shell .bb-button.primary:hover:not(:disabled), .bb-admin-shell .btn.primary:hover:not(:disabled) { background: #7a89e0; border-color: #7a89e0; }
+.bb-admin-shell .bb-button.ghost, .bb-admin-shell .btn.secondary { background: transparent; }
+.bb-admin-shell .bb-button.subtle { background: rgba(107, 123, 214, .1); border-color: rgba(107, 123, 214, .25); color: #d5dbf7; }
+.bb-admin-shell .bb-button.danger, .bb-admin-shell .btn.danger { background: rgba(216, 107, 120, .1); border-color: rgba(216, 107, 120, .3); color: #f0b4bc; }
+.bb-admin-shell .bb-button:disabled, .bb-admin-shell .btn:disabled { opacity: .5; cursor: not-allowed; }
+.bb-admin-shell .bb-button:focus-visible, .bb-admin-shell .btn:focus-visible, .bb-admin-shell .bb-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bb-button svg { width: 15px; height: 15px; }
+.bb-panel-link { font-size: 12px; font-weight: 500; color: var(--accent); }
+.bb-panel-link:hover { text-decoration: underline; }
+
+/* ---------- surfaces ---------- */
+.bb-admin-shell .bb-summary-card, .bb-admin-shell .bb-section-card, .bb-panel, .bb-metric-card, .bb-status-card, .bb-stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: none;
+}
+.bb-admin-shell .bb-summary-card { padding: 14px 16px; }
+.bb-admin-shell .bb-summary-value { font-size: 26px; letter-spacing: -.02em; }
+.bb-admin-shell .bb-section-card { padding: 16px; }
+.bb-admin-shell .bb-section-top h2 { font-size: 16px; letter-spacing: -.01em; }
+.bb-panel { padding: 16px; min-width: 0; }
+.bb-panel-wide { width: 100%; }
+.bb-panel-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: var(--text); }
+.bb-panel-header small { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+/* ---------- grids ---------- */
+.bb-metrics-grid, .bb-secondary-grid { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.bb-panel-grid, .bb-bottom-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bb-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.bb-grid-cards { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ---------- metric + status cards ---------- */
+.bb-metric-card { padding: 14px 16px; }
+.bb-metric-top { display: flex; align-items: center; gap: 10px; }
+.bb-metric-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: rgba(107, 123, 214, .14); color: #aab4f0; flex: none; }
+.bb-metric-icon.purple { background: rgba(143, 123, 214, .14); color: #bfb2ee; }
+.bb-metric-icon.green { background: rgba(63, 174, 124, .14); color: #7fd3ac; }
+.bb-metric-icon.amber { background: rgba(216, 162, 79, .14); color: #e6c088; }
+.bb-metric-label { font-size: 12px; color: var(--muted); }
+.bb-metric-value { font-size: 28px; font-weight: 650; letter-spacing: -.02em; line-height: 1.15; margin-top: 10px; font-variant-numeric: tabular-nums; }
+.bb-metric-hint { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+.bb-status-card { padding: 12px 16px; }
+.bb-status-head { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.bb-status-value { font-size: 18px; font-weight: 650; margin-top: 8px; }
+.bb-status-value.ok { color: #7fd3ac; } .bb-status-value.bad { color: #f0b4bc; }
+.bb-status-value.warn { color: #e6c088; } .bb-status-value.muted { color: #aeb9cc; }
+.bb-status-detail { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+/* ---------- status pills / badges ---------- */
+.bb-mini-pill, .pill, .bb-admin-shell .bb-badge {
+  display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .02em;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); white-space: nowrap;
+}
+.bb-mini-pill.ok, .pill.ok, .bb-admin-shell .bb-badge.success { color: #8fdcb7; border-color: rgba(63, 174, 124, .4); background: rgba(63, 174, 124, .1); }
+.bb-mini-pill.bad, .pill.bad { color: #f0b4bc; border-color: rgba(216, 107, 120, .45); background: rgba(216, 107, 120, .1); }
+.pill.warn { color: #e6c088; border-color: rgba(216, 162, 79, .4); background: rgba(216, 162, 79, .1); }
+.bb-mini-pill.muted, .pill.muted, .bb-admin-shell .bb-badge.muted { color: #aeb9cc; }
+
+/* ---------- donut + legend (dashboard, results) ---------- */
+.bb-donut-layout { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.bb-donut-wheel { position: relative; width: 150px; height: 150px; border-radius: 50%; flex: none; }
+.bb-donut-center { position: absolute; inset: 24px; border-radius: 50%; background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
+.bb-donut-center strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.bb-donut-center span { font-size: 11px; color: var(--muted); }
+.bb-donut-legend { flex: 1; min-width: 180px; display: flex; flex-direction: column; }
+.bb-legend-row { display: grid; grid-template-columns: 10px 1fr auto 44px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.bb-legend-row:last-child { border-bottom: 0; }
+.bb-legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.bb-legend-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-legend-count { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bb-legend-percent { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- voting progress ---------- */
+.bb-progress-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bb-progress-item { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface2); font-size: 13px; color: var(--muted); }
+.bb-progress-item strong { color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; }
+.bb-progress-visual { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.bb-progress-rail, .rbar { flex: 1; height: 8px; border-radius: 99px; background: var(--surface2); overflow: hidden; }
+.bb-progress-rail span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.rbar > div { height: 100%; background: var(--accent); }
+.bb-progress-label { font-weight: 600; font-size: 13px; min-width: 40px; text-align: right; }
+.bb-progress-caption { margin-top: 8px; color: var(--muted); font-size: 12px; }
+
+/* ---------- bar chart (votes per day) ---------- */
+.bb-bars { display: flex; align-items: flex-end; gap: 14px; height: 150px; padding: 4px 4px 0; overflow-x: auto; }
+.bb-bar { flex: 1 1 0; min-width: 36px; max-width: 90px; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.bb-bar-value { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bb-bar-col { flex: 1; width: 100%; display: flex; align-items: flex-end; border-bottom: 1px solid var(--border); }
+.bb-bar-col > div { width: 100%; max-width: 48px; margin: 0 auto; min-height: 3px; background: var(--accent); border-radius: 3px 3px 0 0; }
+.bb-bar-label { font-size: 11px; color: var(--muted); }
+.bb-line-chart-box { width: 100%; height: 180px; }
+
+/* ---------- empty states ---------- */
+.bb-empty-state, .bb-empty-chart, .bb-admin-shell .bb-empty-panel {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  padding: 28px 16px; color: var(--muted); border: 1px dashed var(--border); border-radius: var(--r); background: transparent; font-size: 13px;
+}
+.bb-empty-title { color: var(--text); font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.bb-empty-text { max-width: 360px; line-height: 1.5; }
+.bb-admin-shell .bb-empty-panel h3 { font-size: 15px; margin: 10px 0 4px; }
+.bb-admin-shell .bb-empty-panel-icon { font-size: 28px; color: var(--muted); opacity: .6; }
+.empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+/* ---------- activity list + chain box ---------- */
+.bb-activity-list { list-style: none; margin: 0; padding: 0; }
+.bb-activity-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.bb-activity-list li:last-child { border-bottom: 0; }
+.bb-activity-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.bb-activity-left strong { display: block; font-size: 13px; font-weight: 600; }
+.bb-activity-left small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.bb-activity-status { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.bb-activity-status.success { background: var(--ok); } .bb-activity-status.warn { background: var(--warn); }
+.bb-activity-tag { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); flex: none; }
+.bb-activity-tag.warn { color: #e6c088; }
+
+.bb-chain-box { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface2); }
+.bb-chain-state { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 650; }
+.bb-chain-state.ok { color: #8fdcb7; } .bb-chain-state.bad { color: #f0b4bc; } .bb-chain-state.muted { color: #aeb9cc; }
+.bb-chain-meta { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.bb-chain-meta svg { color: var(--muted); }
+.bb-chain-note { color: var(--muted); font-size: 12px; }
+.bb-inline-note { margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(216, 162, 79, .35); border-left: 3px solid var(--warn); border-radius: 6px; background: rgba(216, 162, 79, .08); color: #e6c088; font-size: 12.5px; }
+.bb-footer-link { display: flex; gap: 8px; justify-content: center; margin: 20px 0 0; font-size: 12px; color: var(--muted); }
+.bb-footer-link a:hover { color: var(--text); }
+
+/* ---------- results page ---------- */
+.bb-result-list { display: flex; flex-direction: column; gap: 12px; }
+.bb-result-row { display: grid; grid-template-columns: minmax(120px, 220px) 1fr auto; gap: 14px; align-items: center; }
+.bb-result-name { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.bb-result-bar { height: 8px; border-radius: 99px; background: var(--surface2); overflow: hidden; }
+.bb-result-bar > * { display: block; height: 100%; border-radius: 99px; }
+.bb-result-stat { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+
+/* ---------- tables (legacy .tbl and .bb-table share one look) ---------- */
+.tbl-wrap, .bb-admin-shell .bb-table-shell { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); }
+.tbl, .bb-admin-shell .bb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th, .bb-admin-shell .bb-table th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: #0d131c; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tbl td, .bb-admin-shell .bb-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tbl tr:last-child td, .bb-admin-shell .bb-table tbody tr:last-child td { border-bottom: 0; }
+.tbl tbody tr:hover, .bb-admin-shell .bb-table tbody tr:hover { background: rgba(255, 255, 255, .025); }
+.bb-admin-shell .bb-table { min-width: 0; }
+
+/* ---------- legacy stat cards, note, chain explorer (Blockchain / Voting pages) ---------- */
+.bb-stat { padding: 14px 16px; }
+.bb-stat .l { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.bb-stat .v { font-size: 26px; font-weight: 650; margin-top: 8px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.bb-stat .s { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.note { border: 1px solid var(--border); border-left: 3px solid var(--warn); background: var(--surface); padding: 10px 14px; border-radius: 6px; font-size: 13px; color: var(--muted); line-height: 1.55; margin: 0; }
+.sub { color: var(--muted); font-size: 13px; }
+.chain { display: flex; gap: 0; overflow-x: auto; padding: 4px 2px 14px; }
+.blk { flex: 0 0 260px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; font-size: 13px; min-width: 0; }
+.blk h4 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 8px; font-size: 14px; }
+.blk .k { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; margin-top: 10px; }
+.blk code { display: block; margin-top: 3px; word-break: break-all; }
+.link { flex: 0 0 24px; align-self: center; height: 2px; background: var(--accent); opacity: .55; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1100px) {
+  .bb-metrics-grid, .bb-secondary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .bb-panel-grid, .bb-bottom-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .bb-admin-shell .bb-admin-sidebar { position: fixed; z-index: 30; inset: 0 auto 0 0; transform: translateX(-100%); transition: transform .18s ease; width: 260px; }
+  .bb-admin-shell .bb-admin-sidebar.open { transform: translateX(0); }
+  .bb-admin-shell .bb-menu-btn { display: inline-grid; place-items: center; }
+  .bb-admin-shell .bb-admin-main { padding: 16px; }
+  .bb-admin-shell .bb-admin-topbar { padding: 10px 16px; }
+  .bb-admin-shell .bb-topbar-user span:last-child { display: none; }
+  .bb-metrics-grid, .bb-secondary-grid, .bb-grid-cards, .bb-progress-summary { grid-template-columns: 1fr; }
+  .bb-header-strip { align-items: flex-start; text-align: left; }
+  .bb-result-row { grid-template-columns: 1fr; gap: 6px; }
+  .bb-donut-layout { justify-content: center; }
+}
