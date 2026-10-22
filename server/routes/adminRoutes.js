@@ -14,28 +14,18 @@ const fails = new Map();
 const WINDOW = 15 * 60 * 1000;
 const recent = ip => (fails.get(ip) || []).filter(t => Date.now() - t < WINDOW);
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     if (!configured()) return res.status(503).json({ success: false, message: `Admin login is not configured. Missing in server/.env: ${missing().join(', ')}. Run "npm run setup-admin -- <password>" in the server folder, then restart the server.` });
     if (recent(req.ip).length >= 5) return res.status(429).json({ success: false, message: 'Too many attempts. Try again later.' });
     const { username, password } = req.body || {};
     if (typeof username !== 'string' || typeof password !== 'string' || !checkCredentials(username, password)) {
         fails.set(req.ip, [...recent(req.ip), Date.now()]);
+        await audit(null, 'ADMIN_LOGIN_FAILED', 'admin');   // the attempted username/password are never recorded
         return res.status(401).json({ success: false, message: 'Invalid username or password' });
     }
     fails.delete(req.ip);
+    await audit(null, 'ADMIN_LOGIN', 'admin');
     res.json({ success: true, token: signToken(), expires_in: TTL_MS / 1000 });
-});
-
-// Raw audit rows only (voter_id, action, timestamp) – no biometric data exists in this table.
-router.get('/audit-logs', requireAdmin, async (req, res) => {
-    try {
-        const [rows] = await db.query("SELECT id, voter_id, action, actor, timestamp FROM audit_log ORDER BY id DESC LIMIT 200");
-        // Ballot secrecy: the vote event stores the chosen candidate; never reveal who voted for whom.
-        res.json(rows.map(r => ({ ...r, action: r.action.startsWith('VOTED_FOR:') ? 'VOTED_FOR' : r.action })));
-    } catch (e) {
-        console.error('audit-logs error:', e.message);
-        res.status(500).json({ success: false, message: 'Could not load audit logs' });
-    }
 });
 
 // Chain status for the admin Blockchain page (the Python service itself is not exposed to the browser).
@@ -43,7 +33,9 @@ router.get('/blockchain', requireAdmin, async (req, res) => {
     try {
         const r = await require('../config/ai').get('/blockchain-status');
         if (r.status !== 200) return res.status(502).json({ success: false, message: 'AI service returned an error' });
-        res.json(r.data);
+        // Ballot secrecy: never hand the browser a block's chosen candidate next to its (hashed) voter.
+        const chain = (r.data.chain || []).map(({ candidate, ...b }, i) => ({ ...b, vote_reference: b.index === 0 ? null : `VOTE-${String(b.index).padStart(4, '0')}` }));
+        res.json({ ...r.data, chain });
     } catch (e) {
         res.status(503).json({ success: false, message: 'AI service is unavailable. Start python_ai (python app.py).' });
     }
@@ -64,11 +56,15 @@ router.put('/election', requireAdmin, async (req, res) => {
         const b = req.body || {};
         const name = String(b.name ?? cur.name).trim();
         const status = String(b.status ?? cur.status).toUpperCase();
+        const election_type = String(b.election_type ?? cur.election_type).toUpperCase();
         const parse = v => (v === null || v === '' ? null : new Date(v));
         const start = b.start_time === undefined ? (cur.start_time && new Date(cur.start_time)) : parse(b.start_time);
         const end = b.end_time === undefined ? (cur.end_time && new Date(cur.end_time)) : parse(b.end_time);
         const errors = {};
         if (name.length < 3 || name.length > 150) errors.name = { code: 'NAME_INVALID', message: 'Election name must be 3-150 characters.' };
+        if (!['PARLIAMENTARY', 'ASSEMBLY', 'OTHER'].includes(election_type)) errors.election_type = { code: 'TYPE_INVALID', message: 'Election type must be Parliamentary, Assembly or Other.' };
+        if (election_type !== cur.election_type && (await db.query('SELECT 1 FROM candidates WHERE election_id = ? LIMIT 1', [cur.election_id]))[0].length)
+            errors.election_type = { code: 'TYPE_LOCKED', message: 'The election type cannot change once candidates exist for this election.' };
         if (!['DRAFT', 'SCHEDULED', 'ACTIVE', 'ENDED'].includes(status)) errors.status = { code: 'STATUS_INVALID', message: 'Invalid status.' };
         if ((start && isNaN(start)) || (end && isNaN(end))) errors.start_time = { code: 'DATE_INVALID', message: 'Invalid date/time.' };
         if (['SCHEDULED', 'ACTIVE'].includes(status) && (!start || !end)) errors.start_time = { code: 'DATES_REQUIRED', message: 'Start and end time are required to schedule an election.' };
@@ -76,7 +72,7 @@ router.put('/election', requireAdmin, async (req, res) => {
         if (Object.keys(errors).length) return bad(res, errors);
         // ACTIVE is not stored: it is SCHEDULED with a window that contains "now".
         const stored = status === 'ACTIVE' ? 'SCHEDULED' : status;
-        await db.query("UPDATE elections SET name=?, start_time=?, end_time=?, status=? WHERE election_id=?", [name, start, end, stored, cur.election_id]);
+        await db.query("UPDATE elections SET name=?, start_time=?, end_time=?, status=?, election_type=? WHERE election_id=?", [name, start, end, stored, election_type, cur.election_id]);
         await audit(null, `ELECTION_UPDATED:${stored}`, 'admin');
         const e = await election.current();
         res.json({ success: true, election: { ...e, status_stored: e.status, status: e.effective_status } });
@@ -105,57 +101,9 @@ router.post('/election/close', requireAdmin, async (req, res) => {
     } catch (e) { console.error('close error:', e.message); res.status(500).json({ success: false, message: 'Could not close election' }); }
 });
 
-// ---------- Candidate management ----------
-const locked = async () => { const e = await election.current(); return e && ['ACTIVE', 'ENDED'].includes(e.effective_status) ? e.effective_status : null; };
-function cleanCandidate(b) {
-    const name = String(b.name ?? '').trim(), party = String(b.party ?? '').trim();
-    const symbol = String(b.symbol ?? '').trim(), description = String(b.description ?? '').trim();
-    const errors = {};
-    if (name.length < 2 || name.length > 100) errors.name = { code: 'NAME_INVALID', message: 'Candidate name must be 2-100 characters.' };
-    if (party.length < 2 || party.length > 100) errors.party = { code: 'PARTY_INVALID', message: 'Party / group must be 2-100 characters.' };
-    if ([...symbol].length > 4) errors.symbol = { code: 'SYMBOL_INVALID', message: 'Symbol must be at most 4 characters.' };
-    if (description.length > 500) errors.description = { code: 'DESC_LONG', message: 'Description must be at most 500 characters.' };
-    return { name, party, symbol: symbol || null, description: description || null, errors };
-}
-const lockedMsg = s => ({ success: false, code: 'ELECTION_LOCKED', message: `Candidates cannot be changed while the election is ${s}.` });
-
-router.get('/candidates', requireAdmin, async (req, res) => {
-    try { const [r] = await db.query("SELECT candidate_id, name, party, symbol, description, is_active, vote_count FROM candidates ORDER BY candidate_id"); res.json(r); }
-    catch (e) { console.error('admin candidates error:', e.message); res.status(500).json({ success: false, message: 'Could not load candidates' }); }
-});
-router.post('/candidates', requireAdmin, async (req, res) => {
-    try {
-        const c = cleanCandidate(req.body || {});
-        if (Object.keys(c.errors).length) return bad(res, c.errors);
-        const l = await locked(); if (l) return res.status(409).json(lockedMsg(l));
-        const cur = await election.current();
-        const [r] = await db.query("INSERT INTO candidates (name, party, symbol, description, election_id) VALUES (?,?,?,?,?)", [c.name, c.party, c.symbol, c.description, cur.election_id]);
-        await audit(null, `CANDIDATE_ADDED:${r.insertId}`, 'admin');
-        res.status(201).json({ success: true, candidate_id: r.insertId });
-    } catch (e) { console.error('add candidate error:', e.message); res.status(500).json({ success: false, message: 'Could not add candidate' }); }
-});
-router.put('/candidates/:id', requireAdmin, async (req, res) => {
-    try {
-        const id = Number(req.params.id);
-        const c = cleanCandidate(req.body || {});
-        if (Object.keys(c.errors).length) return bad(res, c.errors);
-        const l = await locked(); if (l) return res.status(409).json(lockedMsg(l));
-        const [r] = await db.query("UPDATE candidates SET name=?, party=?, symbol=?, description=? WHERE candidate_id=?", [c.name, c.party, c.symbol, c.description, id]);
-        if (!r.affectedRows) return res.status(404).json({ success: false, message: 'Candidate not found' });
-        await audit(null, `CANDIDATE_EDITED:${id}`, 'admin');
-        res.json({ success: true });
-    } catch (e) { console.error('edit candidate error:', e.message); res.status(500).json({ success: false, message: 'Could not update candidate' }); }
-});
-router.post('/candidates/:id/active', requireAdmin, async (req, res) => {
-    try {
-        const id = Number(req.params.id), active = req.body?.active === true;
-        const l = await locked(); if (l) return res.status(409).json(lockedMsg(l));
-        const [r] = await db.query("UPDATE candidates SET is_active=? WHERE candidate_id=?", [active, id]);
-        if (!r.affectedRows) return res.status(404).json({ success: false, message: 'Candidate not found' });
-        await audit(null, `CANDIDATE_${active ? 'ACTIVATED' : 'DEACTIVATED'}:${id}`, 'admin');
-        res.json({ success: true });
-    } catch (e) { console.error('candidate active error:', e.message); res.status(500).json({ success: false, message: 'Could not update candidate' }); }
-});
+// Candidates, parties and constituencies live in their own router.
+router.use(require('./adminCatalogRoutes'));
+router.use(require('./adminDataRoutes'));
 
 // ---------- Security / system status ----------
 router.get('/security', requireAdmin, async (req, res) => {

@@ -17,6 +17,7 @@ app.use('/api/voters', require('./routes/voterRoutes'));
 app.use('/api/votes', require('./routes/voteRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/identity', require('./routes/identityRoutes'));
+app.use('/api/geo', require('./routes/geoRoutes'));
 
 // Public, non-secret configuration the UI needs to decide which registration steps to show.
 app.get('/api/config', (req, res) => res.json({ identity: require('./services/identity').info() }));
@@ -27,7 +28,16 @@ app.get('/', (req, res) => res.json({ message: 'BlockBioVote Server Running ✅'
 app.get('/api/health', async (req, res) => {
     const status = { server: 'ok', database: 'down', ai_service: 'down', admin_login: adminAuth.configured() ? 'configured' : 'NOT configured' };
     try { await db.query('SELECT 1'); status.database = 'ok'; } catch (e) { /* keep 'down' */ }
-    try { const r = await ai.get('/health'); if (r.status === 200) status.ai_service = 'ok'; } catch (e) { /* keep 'down' */ }
+    try {
+        const r = await ai.get('/health');
+        if (r.status === 200) {
+            status.ai_service = 'ok';
+            // /health is open; this protected route proves INTERNAL_API_KEY matches in both .env files.
+            const k = await ai.get('/blockchain-status');
+            if (k.status === 403) status.ai_service = 'INTERNAL_API_KEY mismatch between server/.env and python_ai/.env';
+            else if (k.status !== 200) status.ai_service = `ok (protected route returned ${k.status})`;
+        }
+    } catch (e) { /* keep 'down' */ }
     const healthy = status.database === 'ok' && status.ai_service === 'ok';
     res.status(healthy ? 200 : 503).json(status);
 });

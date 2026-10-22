@@ -32,7 +32,5 @@ CREATE TABLE IF NOT EXISTS audit_log (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT IGNORE INTO candidates (name, party, symbol) VALUES
-('Candidate A', 'Party Alpha', '🌟'),
-('Candidate B', 'Party Beta', '🌙'),
-('Candidate C', 'Party Gamma', '⭐');
+-- No sample candidates are inserted: candidates, parties, states and constituencies are managed in the admin panel
+-- (states, parties and Karnataka's constituencies are seeded by the server on start: server/config/seed.js).

@@ -48,6 +48,21 @@ function validateDetails(body) {
     return { voter_id, name, age, gender, address, errors: e };
 }
 
+// Optional constituency the voter declares. It is never inferred; if given it must exist, be active and sit in the stated state.
+async function resolveLocation(body) {
+    const cid = body.constituency_id === undefined || body.constituency_id === null || body.constituency_id === '' ? null : Number(body.constituency_id);
+    const sid = body.state_id === undefined || body.state_id === null || body.state_id === '' ? null : Number(body.state_id);
+    if (cid === null) {
+        if (sid !== null && !Number.isInteger(sid)) return { error: { state_id: { code: 'STATE_INVALID', message: 'Select a valid state.' } } };
+        if (sid !== null) { const [r] = await db.query('SELECT state_id FROM states WHERE state_id = ?', [sid]); if (!r.length) return { error: { state_id: { code: 'STATE_INVALID', message: 'Select a valid state.' } } }; }
+        return { state_id: sid, constituency_id: null };
+    }
+    if (!Number.isInteger(cid)) return { error: { constituency_id: { code: 'CONSTITUENCY_INVALID', message: 'Select a valid constituency.' } } };
+    const [r] = await db.query('SELECT state_id FROM constituencies WHERE constituency_id = ? AND is_active', [cid]);
+    if (!r.length || (sid !== null && r[0].state_id !== sid)) return { error: { constituency_id: { code: 'CONSTITUENCY_INVALID', message: 'That constituency does not belong to the selected state.' } } };
+    return { state_id: r[0].state_id, constituency_id: cid };
+}
+
 // Registration ticket: proves this browser started the registration for voter_id.
 function regVoter(req) {
     const id = tokens.verify('reg', tokens.bearer(req));
@@ -68,32 +83,35 @@ router.post('/register', rateLimit('register', 30, 15 * 60 * 1000), async (req, 
             return fieldFail(res, 400, v.errors);
         }
         const { voter_id, name, age, gender, address } = v;
+        const loc = await resolveLocation(req.body || {});
+        if (loc.error) return fieldFail(res, 400, loc.error);
         const dup = { voter_id: { code: 'ID_EXISTS', message: 'Voter ID already exists.' } };
 
         const [exist] = await db.query("SELECT face_encoding IS NOT NULL AS has_face, registered_at FROM voters WHERE voter_id = ?", [voter_id]);
         if (exist.length > 0) {
-            if (exist[0].has_face) return fieldFail(res, 409, dup);
+            if (exist[0].has_face) { await audit(voter_id, 'REGISTRATION_REJECTED:ID_EXISTS'); return fieldFail(res, 409, dup); }
             const mine = regVoter(req) === voter_id;
             // registered_at is written from this server's clock (see INSERT), so comparing with Date.now() is consistent
             const stale = Date.now() - new Date(exist[0].registered_at).getTime() > PENDING_RECLAIM_MS;
             if (!mine && !stale)
                 return fieldFail(res, 409, { voter_id: { code: 'ID_PENDING', message: 'Voter ID already exists (registration in progress). Try again later or contact an administrator.' } });
-            await db.query("UPDATE voters SET name=?, age=?, gender=?, address=?, is_eligible=TRUE, registered_at=? WHERE voter_id=?", [name, age, gender, address, new Date(), voter_id]);
+            await db.query("UPDATE voters SET name=?, age=?, gender=?, address=?, state_id=?, constituency_id=?, is_eligible=TRUE, registered_at=? WHERE voter_id=?", [name, age, gender, address, loc.state_id, loc.constituency_id, new Date(), voter_id]);
             if (!mine) await db.query("DELETE FROM identity_verifications WHERE voter_id = ?", [voter_id]);   // reclaimed ID: old identity proof is not inherited
             return res.json({ success: true, resumed: true, voter_id, registration_token: tokens.signReg(voter_id),
                 message: 'Details saved. Continue with the next step.' });
         }
 
         try {
-            await db.query("INSERT INTO voters (voter_id, name, age, gender, address, is_eligible, registered_at) VALUES (?, ?, ?, ?, ?, TRUE, ?)", [voter_id, name, age, gender, address, new Date()]);
+            await db.query("INSERT INTO voters (voter_id, name, age, gender, address, state_id, constituency_id, is_eligible, registered_at) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?)", [voter_id, name, age, gender, address, loc.state_id, loc.constituency_id, new Date()]);
         } catch (e) {
-            if (e.code === 'ER_DUP_ENTRY') return fieldFail(res, 409, dup);   // double-click / parallel request
+            if (e.code === 'ER_DUP_ENTRY') { await audit(voter_id, 'REGISTRATION_REJECTED:ID_EXISTS'); return fieldFail(res, 409, dup); }   // double-click / parallel request
             throw e;
         }
         await audit(voter_id, 'REGISTERED');
         res.json({ success: true, voter_id, registration_token: tokens.signReg(voter_id), message: `Details saved for ${name}. Continue with the next step.` });
     } catch (e) {
         console.error('register error:', e);   // full cause goes to the server terminal only
+        await audit(null, 'REGISTRATION_FAILED:SERVER_ERROR');
         const schema = ['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE'].includes(e.code);
         fail(res, 500, schema ? 'Server database is out of date. Ask the administrator to run "npm run migrate" in the server folder.' : 'Registration failed. Please try again.',
             { code: schema ? 'DB_SCHEMA' : 'SERVER_ERROR' });
@@ -129,12 +147,13 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
             return fail(res, 403, 'Verify your identity (OTP) before registering your face.', { code: 'IDENTITY_REQUIRED' });
 
         const r = await ai.post('/register-face', { voter_id, images });
-        if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); return fail(res, 503, "Face service is misconfigured"); }
+        if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); await audit(voter_id, 'FACE_REGISTRATION_FAILED:AI_MISCONFIGURED'); return fail(res, 503, "Face service is misconfigured. Ask the administrator to check INTERNAL_API_KEY in server/.env and python_ai/.env.", { code: 'AI_MISCONFIGURED' }); }
         if (r.data && r.data.success) await audit(voter_id, 'FACE_REGISTERED');
         else if (r.data && r.data.code) await audit(voter_id, `FACE_REGISTRATION_FAILED:${r.data.code}`);
         res.status(r.status).json(r.data);
     } catch (e) {
         console.error('register-face error:', e.message);
+        await audit(req.regVoter, 'FACE_REGISTRATION_FAILED:AI_UNAVAILABLE');
         fail(res, 503, "Face service is unavailable. Please try again shortly.");
     }
 });
@@ -146,8 +165,9 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
     const { face_image, voter_id: claimed } = req.body || {};
     try {
         const aiRes = await ai.post('/authenticate', { image: face_image });
-        if (aiRes.status >= 500 || aiRes.status === 403) return res.json({ success: false, code: 'AI_ERROR', message: "Authentication service error. Please try again." });
-        if (!aiRes.data.success) return res.json(aiRes.data);
+        const typed = VOTER_ID_RE.test(String(claimed ?? '').trim().toUpperCase()) ? String(claimed).trim().toUpperCase() : null;   // unverified: only logged when well-formed
+        if (aiRes.status >= 500 || aiRes.status === 403) { await audit(typed, 'AUTH_FAILED:AI_ERROR'); return res.json({ success: false, code: 'AI_ERROR', message: "Authentication service error. Please try again." }); }
+        if (!aiRes.data.success) { await audit(typed, `AUTH_FAILED:${aiRes.data.code || 'NOT_RECOGNIZED'}`); return res.json(aiRes.data); }
         const { voter_id, voter_name, has_voted } = aiRes.data;
         if (claimed && String(claimed).trim().toUpperCase() !== String(voter_id).toUpperCase()) {
             await audit(voter_id, 'AUTH_ID_MISMATCH');
@@ -161,6 +181,7 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
         res.json({ ...aiRes.data, session_token: tokens.signVoter(voter_id) });
     } catch (e) {
         console.error('authenticate error:', e.message);
+        await audit(null, 'AUTH_FAILED:AI_UNAVAILABLE');
         res.json({ success: false, message: "Authentication service is unavailable. Please try again." });
     }
 });
@@ -168,8 +189,10 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
 router.get('/all', requireAdmin, async (req, res) => {
     try {
         const [rows] = await db.query(`SELECT v.voter_id, v.name, v.age, v.has_voted, v.is_eligible, v.face_encoding IS NOT NULL AS face_registered,
-                COALESCE(i.status, 'NOT_STARTED') AS identity_status, v.registered_at
-            FROM voters v LEFT JOIN identity_verifications i ON i.voter_id = v.voter_id ORDER BY v.registered_at DESC`);
+                COALESCE(i.status, 'NOT_STARTED') AS identity_status, v.registered_at,
+                v.state_id, v.constituency_id, s.name AS state_name, k.name AS constituency_name
+            FROM voters v LEFT JOIN identity_verifications i ON i.voter_id = v.voter_id
+            LEFT JOIN states s ON s.state_id = v.state_id LEFT JOIN constituencies k ON k.constituency_id = v.constituency_id ORDER BY v.registered_at DESC`);
         res.json(rows);
     } catch (e) {
         console.error('voters/all error:', e.message);

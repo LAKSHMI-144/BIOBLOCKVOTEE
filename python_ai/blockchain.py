@@ -50,11 +50,13 @@ class Blockchain:
         return True
 
     def get_chain_data(self):
+        # Ballot secrecy: the chosen candidate is NOT part of this view (only the Node API reads it, and the
+        # block itself still contains it so that tampering with a recorded vote is detected by is_valid()).
         return [{
             "index": b.index,
             "hash": b.hash[:25] + "...",
+            "prev_hash": (b.prev_hash[:25] + "...") if len(b.prev_hash) > 1 else b.prev_hash,
             "voter_hash": b.voter_hash[:20] + "...",
-            "candidate": b.candidate,
             "timestamp": b.timestamp
         } for b in self.chain]
 
