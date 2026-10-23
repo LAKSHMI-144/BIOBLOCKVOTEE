@@ -9,7 +9,7 @@ import { API, apiError, regToken, bearer } from '../api'
 const MIN_IMAGES = 3, MAX_IMAGES = 5
 const VIDEO = { width: 640, height: 480, facingMode: 'user' }
 const ID_RE = /^[A-Z0-9-]{4,20}$/, NAME_RE = /^\p{L}[\p{L}\p{M}\s.'-]{1,98}$/u, PHONE_RE = /^[6-9]\d{9}$/
-const EMPTY = { voter_id: '', name: '', age: '', gender: '', address: '' }
+const EMPTY = { voter_id: '', name: '', age: '', gender: '', address: '', state_id: '', constituency_id: '' }
 
 // Same rules as the server (which re-validates everything). Returns { field: errorCode }.
 function validate(f) {
@@ -19,6 +19,8 @@ function validate(f) {
   if (String(f.age).trim() === '') e.age = 'AGE_REQUIRED'; else if (!Number.isInteger(age) || age < 1 || age > 120) e.age = 'AGE_INVALID'; else if (age < 18) e.age = 'AGE_MIN'
   if (!addr) e.address = 'ADDRESS_REQUIRED'; else if (addr.length < 5) e.address = 'ADDRESS_SHORT'
   if (!['Male', 'Female', 'Other'].includes(f.gender)) e.gender = 'GENDER_INVALID'
+  if (!f.state_id) e.state_id = 'STATE_REQUIRED'
+  if (f.state_id && !f.constituency_id) e.constituency_id = 'CONSTITUENCY_REQUIRED'
   return e
 }
 
@@ -44,6 +46,10 @@ export default function Register() {
   const [cameraReady, setCameraReady] = useState(false)
   const [camError, setCamError] = useState(false)
   const [faceStatus, setFaceStatus] = useState('')
+  // India master data for the ballot: state/UT, then that state's constituencies (public, read-only endpoints)
+  const [states, setStates] = useState([])
+  const [consts, setConsts] = useState([])
+  const [geoErr, setGeoErr] = useState(false)
 
   const total = identityOn ? 3 : 2
   const shown = step === 1 ? 1 : step === 2 ? 2 : identityOn ? 3 : 2
@@ -51,6 +57,13 @@ export default function Register() {
   const clearErr = f => setErrors(p => (p[f] ? { ...p, [f]: undefined } : p))
 
   useEffect(() => { axios.get(`${API}/config`).then(r => { setIdentityOn(r.data.identity.mode === 'required'); setIdvInfo(r.data.identity) }).catch(() => {}) }, [])
+  useEffect(() => { axios.get(`${API}/geo/states`).then(r => setStates(r.data)).catch(() => setGeoErr(true)) }, [])
+  useEffect(() => {
+    if (!form.state_id) return
+    let live = true
+    axios.get(`${API}/geo/constituencies`, { params: { state_id: form.state_id } }).then(r => live && (setConsts(r.data), setGeoErr(false))).catch(() => live && setGeoErr(true))
+    return () => { live = false }
+  }, [form.state_id])
   useEffect(() => { if (cooldown <= 0) return; const id = setTimeout(() => setCooldown(c => c - 1), 1000); return () => clearTimeout(id) }, [cooldown])
 
   // One place for every API call: blocks re-entry, shows a label, maps errors.
@@ -70,12 +83,12 @@ export default function Register() {
       return say('error', t('reg.fixErrors'))
     }
     setErrors({})
-    const body = { ...form, voter_id: form.voter_id.trim().toUpperCase(), name: form.name.trim().replace(/\s+/g, ' '), age: Number(form.age), address: form.address.trim() }
+    const body = { ...form, voter_id: form.voter_id.trim().toUpperCase(), name: form.name.trim().replace(/\s+/g, ' '), age: Number(form.age), address: form.address.trim(), state_id: Number(form.state_id), constituency_id: Number(form.constituency_id) }
     const r = await run(t('reg.checking'), () => axios.post(`${API}/voters/register`, body, bearer(regToken.get())))
     if (!r) return
     if (r.error) return setErrors(r.error.fields)
     regToken.set(r.data.registration_token)
-    setForm(f => ({ ...f, ...body, age: String(body.age) }))
+    setForm(f => ({ ...f, ...body, age: String(body.age), state_id: String(body.state_id), constituency_id: String(body.constituency_id) }))
     if (identityOn) {
       const s = await axios.get(`${API}/identity/status`, bearer(r.data.registration_token)).catch(() => null)   // resumed registration may already be verified
       setStep(s?.data?.verified ? 3 : 2)
@@ -162,6 +175,24 @@ export default function Register() {
               </select>
               {errors.gender && <p className="field-err" role="alert">{errors.gender}</p>}
             </div>
+            <div>
+              <label htmlFor="state_id">{t('reg.state')} *</label>
+              <select id="state_id" className={`input${errors.state_id ? ' invalid' : ''}`} value={form.state_id} disabled={!!loading} onChange={e => { setConsts([]); setForm({ ...form, state_id: e.target.value, constituency_id: '' }); clearErr('state_id') }}>
+                <option value="">{t('reg.stateSelect')}</option>
+                {states.map(s => <option key={s.state_id} value={s.state_id}>{s.name}{s.kind === 'UT' ? ' (UT)' : ''}</option>)}
+              </select>
+              {errors.state_id && <p className="field-err" role="alert">{errors.state_id}</p>}
+            </div>
+            <div>
+              <label htmlFor="constituency_id">{t('reg.constituency')} *</label>
+              <select id="constituency_id" className={`input${errors.constituency_id ? ' invalid' : ''}`} value={form.constituency_id} disabled={!!loading || !form.state_id} onChange={e => { setForm({ ...form, constituency_id: e.target.value }); clearErr('constituency_id') }}>
+                <option value="">{t('reg.constSelect')}</option>
+                {consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{c.name}</option>)}
+              </select>
+              {errors.constituency_id && <p className="field-err" role="alert">{errors.constituency_id}</p>}
+              {geoErr && <p className="field-err" role="alert">{t('reg.geoError')}</p>}
+            </div>
+            <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 4 }}>{t('reg.constHint')}</p>
             <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 14 }}>{t('reg.hint18')}</p>
             <div className="btn-row">
               <button type="submit" className="btn primary" disabled={!!loading}>{loading || t('common.next')}</button>

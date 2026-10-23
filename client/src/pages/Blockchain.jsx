@@ -46,7 +46,7 @@ export default function Blockchain() {
                   <div className="k">Hash</div><code>{b.hash}</code>
                   <div className="k">Previous hash</div><code>{i === 0 ? '0' : chain[i - 1].hash}</code>
                   <div className="k">Voter (hashed)</div><code>{b.voter_hash}</code>
-                  <div className="k">Vote reference</div><div>{b.index === 0 ? '-' : b.candidate}</div>
+                  <div className="k">Vote reference</div><div>{b.index === 0 ? '-' : b.vote_reference}</div>
                   <div className="k">Timestamp</div><div>{new Date(parseFloat(b.timestamp) * 1000).toLocaleString()}</div>
                 </div>
               </div>

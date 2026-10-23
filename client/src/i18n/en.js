@@ -78,5 +78,20 @@ export default {
   'err.ADDRESS_REQUIRED': 'Please enter your address.', 'err.ADDRESS_SHORT': 'Please enter your full address.', 'err.GENDER_INVALID': 'Please select a gender.',
   'err.invalidCredentials': 'Invalid credentials.', 'err.DB_SCHEMA': 'Server database is out of date. Ask the administrator to run "npm run migrate".',
   'err.NO_FACE': 'No face detected. Face the camera in good lighting.', 'err.MULTIPLE_FACES': 'More than one face detected. Only the voter should be in frame.',
-  'err.registrationFailed': 'Registration failed. Please try again.'
+  'err.registrationFailed': 'Registration failed. Please try again.',
+  "reg.state": "State / Union Territory",
+  "reg.stateSelect": "Select state / UT",
+  "reg.constituency": "Constituency",
+  "reg.constSelect": "Select constituency",
+  "reg.constHint": "Your constituency decides which candidates appear on your ballot.",
+  "reg.geoError": "Could not load states and constituencies. Check that the backend is running.",
+  "err.STATE_REQUIRED": "Please select your state or union territory.",
+  "err.STATE_INVALID": "Select a valid state or union territory.",
+  "err.CONSTITUENCY_REQUIRED": "Please select your constituency.",
+  "err.CONSTITUENCY_INVALID": "Select a valid constituency of the chosen state.",
+  "err.NO_CONSTITUENCY": "Your constituency has not been set, so no ballot can be shown. Please contact an election administrator.",
+  "err.CANDIDATE_INVALID": "That candidate is not on your ballot.",
+  "err.NOT_ELIGIBLE": "This voter is not eligible to vote.",
+  "vote.ballotFor": "Ballot for {constituency}, {state}",
+  "vote.loadFailed": "Could not load your ballot."
 }

@@ -5,7 +5,7 @@ import { adminToken } from '../api'
 
 const NAV = [
   { id: 'dashboard', title: 'Dashboard', links: [{ to: '/admin', label: 'Dashboard', end: true }] },
-  { id: 'election', title: 'Election', links: [{ to: '/admin/election', label: 'Election Details' }, { to: '/admin/candidates', label: 'Candidates' }] },
+  { id: 'election', title: 'Election', links: [{ to: '/admin/election', label: 'Election Details' }, { to: '/admin/parties', label: 'Parties' }, { to: '/admin/candidates', label: 'Candidates' }] },
   { id: 'voters', title: 'Voters', links: [{ to: '/admin/voters', label: 'Registered Voters' }, { to: '/admin/voting', label: 'Voting Progress' }] },
   { id: 'security', title: 'Security', links: [{ to: '/admin/audit', label: 'Audit Logs' }, { to: '/admin/blockchain', label: 'Blockchain Integrity' }] },
   { id: 'results', title: 'Results', links: [{ to: '/admin/results', label: 'Results' }] },

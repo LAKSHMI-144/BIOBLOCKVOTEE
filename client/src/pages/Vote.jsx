@@ -17,6 +17,8 @@ export default function Vote({ mode = 'auth' }) {
   const [step, setStep] = useState(mode === 'vote' ? 'vote' : 'auth')
   const [candidates, setCandidates] = useState([])
   const [election, setElection] = useState(null)
+  const [ballot, setBallot] = useState(null)         // { name, state } of the voter's constituency
+  const [noBallot, setNoBallot] = useState(false)
   const [selected, setSelected] = useState('')
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -24,7 +26,13 @@ export default function Vote({ mode = 'auth' }) {
 
   useEffect(() => {
     if (mode !== 'vote') return
-    axios.get(`${API}/votes/candidates`).then(r => setCandidates(r.data)).catch(e => setMsg({ type: 'error', text: apiError(e, t).message }))
+    // The ballot is built by the server from this voter's own constituency; it needs the face-verification session token.
+    axios.get(`${API}/votes/candidates`, bearer(token)).then(r => { setCandidates(r.data.candidates || []); setBallot(r.data.constituency || null) })
+      .catch(e => {
+        const er = apiError(e, t)
+        if (er.code === 'VOTER_SESSION') { logout(); nav('/voter/login'); return }
+        setNoBallot(er.code === 'NO_CONSTITUENCY'); setMsg({ type: 'error', text: er.message || t('vote.loadFailed') })
+      })
     axios.get(`${API}/votes/election`).then(r => setElection(r.data)).catch(() => {})
   }, [mode])  // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -86,19 +94,20 @@ export default function Vote({ mode = 'auth' }) {
         <div className="card">
           <p className="hint" style={{ marginBottom: 12 }}>{t('vote.voter', { name: voter?.name, id: voter?.id })}</p>
           {closed && <p className="msg error" role="alert" style={{ textAlign: 'left' }}>{t('vote.closed')}</p>}
+          {ballot && <p className="hint" style={{ marginBottom: 12 }}>{t('vote.ballotFor', { constituency: ballot.name, state: ballot.state })}</p>}
           <h3 style={{ marginBottom: 12 }}>{t('vote.select')}</h3>
-          {candidates.length === 0 && <p className="hint">{t('vote.noCandidates')}</p>}
+          {candidates.length === 0 && !noBallot && <p className="hint">{t('vote.noCandidates')}</p>}
           {candidates.map(c => (
             <label key={c.candidate_id} className="cand-option">
               <input type="radio" name="cand" value={`${c.candidate_id}:${c.name}`} disabled={closed} onChange={e => setSelected(e.target.value)} style={{ width: 18, height: 18 }} />
               <div>
                 <span className="cand-name">{c.symbol} {c.name}</span>
-                <span className="cand-party">{c.party}</span>
+                <span className="cand-party">{c.party}{c.party_abbr && c.party_abbr !== c.party ? ` (${c.party_abbr})` : ''}</span>
               </div>
             </label>
           ))}
           <div className="btn-row">
-            <button className="btn primary" onClick={castVote} disabled={loading || closed}>{loading ? t('vote.submitting') : `✅ ${t('vote.submit')}`}</button>
+            <button className="btn primary" onClick={castVote} disabled={loading || closed || candidates.length === 0}>{loading ? t('vote.submitting') : `✅ ${t('vote.submit')}`}</button>
             <button className="btn secondary" onClick={() => nav('/voter/dashboard')} disabled={loading}>{t('common.cancel')}</button>
           </div>
         </div>

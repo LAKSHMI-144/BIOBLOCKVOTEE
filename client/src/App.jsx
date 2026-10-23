@@ -11,6 +11,7 @@ import AdminLogin from './pages/AdminLogin'
 import AdminLayout from './components/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminCandidates from './pages/admin/AdminCandidates'
+import AdminParties from './pages/admin/AdminParties'
 import AdminVoters from './pages/admin/AdminVoters'
 import AdminAudit from './pages/admin/AdminAudit'
 import AdminVoting from './pages/admin/AdminVoting'
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="candidates" element={<AdminCandidates />} />
+            <Route path="parties" element={<AdminParties />} />
             <Route path="voters" element={<AdminVoters />} />
             <Route path="audit" element={<AdminAudit />} />
             <Route path="voting" element={<AdminVoting />} />
