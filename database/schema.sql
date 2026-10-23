@@ -1,3 +1,4 @@
+SET NAMES utf8mb4;
 CREATE DATABASE IF NOT EXISTS securevoteai;
 USE securevoteai;
 
@@ -19,6 +20,8 @@ CREATE TABLE IF NOT EXISTS candidates (
     name VARCHAR(100) NOT NULL,
     party VARCHAR(100) NOT NULL,
     symbol VARCHAR(10),
+    position VARCHAR(100) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'Active',
     vote_count INT DEFAULT 0
 );
 
@@ -29,7 +32,5 @@ CREATE TABLE IF NOT EXISTS audit_log (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT IGNORE INTO candidates (name, party, symbol) VALUES
-('Candidate A', 'Party Alpha', '🌟'),
-('Candidate B', 'Party Beta', '🌙'),
-('Candidate C', 'Party Gamma', '⭐');
+-- No sample candidates are inserted: candidates, parties, states and constituencies are managed in the admin panel
+-- (states, parties and Karnataka's constituencies are seeded by the server on start: server/config/seed.js).

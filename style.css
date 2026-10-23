@@ -1,0 +1,72 @@
+/* Universal Selector */
+* {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+}
+/* Element selectors */
+h2 {
+color: darkred;
+font-size: 30px;
+text-align: left;
+margin-top: 25px;
+}
+h3 {
+color: navy;
+font-size: 23px;
+margin-bottom: 12px;
+}
+hr {
+border: 2px solid #666;
+margin: 15px 0;
+}
+
+p {
+font-size: 17px;
+color: #444;
+line-height: 1.5;
+padding: 8px;
+}
+/* ID selector */
+#special {
+background-color: #d9f2ff;
+font-weight: bold;
+}
+/* Class selector */
+.center-text {
+text-align: center;
+color: brown;
+}
+/* Tag selector */
+div {
+border: 2px solid #999;
+padding: 12px;
+margin-bottom: 12px;
+background-color: #f2f2f2;
+}
+span {
+color: green;
+font-style: italic;
+}
+/* Pseudo-class selector */
+a:hover {
+color: red;
+text-decoration: underline;
+}
+/* Attribute selector */
+a[target="_blank"] {
+font-weight: bold;
+color: darkblue;
+}
+/* Time tag styling */
+time {
+color: darkgreen;
+font-style: italic;
+}
+/* Image styling */
+img {
+width: 250px;
+border: 3px solid #333;
+border-radius: 5px;
+margin: 10px 0;
+}

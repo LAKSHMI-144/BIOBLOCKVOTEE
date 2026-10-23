@@ -1,28 +1,10 @@
-// Idempotent upgrade for databases created from an older schema.sql.
+// Idempotent upgrade for databases created from any older schema. Also runs automatically at server start.
 //   cd server && npm run migrate
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const db = require('../config/db');
+const ensureSchema = require('../config/schema');
 
-const COLUMNS = [
-    ['voters', 'is_eligible', 'BOOLEAN NOT NULL DEFAULT TRUE'],
-    ['voters', 'face_registered_at', 'TIMESTAMP NULL']
-];
-
-(async () => {
-    try {
-        for (const [table, col, def] of COLUMNS) {
-            const [rows] = await db.query(
-                `SELECT 1 FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`, [table, col]);
-            if (rows.length) { console.log(`= ${table}.${col} already exists`); continue; }
-            await db.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${col}\` ${def}`);
-            console.log(`+ added ${table}.${col}`);
-        }
-        console.log('Migration complete');
-    } catch (e) {
-        console.error('Migration failed:', e.message);
-        process.exitCode = 1;
-    } finally {
-        await db.end();
-    }
-})();
+ensureSchema().then(done => {
+    console.log(done.length ? done.join('\n') : '= schema already up to date');
+    console.log('Migration complete');
+}).catch(e => { console.error('Migration failed:', e.message); process.exitCode = 1; }).finally(() => db.end());

@@ -2,68 +2,127 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const ai = require('../config/ai');
+const audit = require('../config/audit');
+const tokens = require('../config/tokens');
+const identity = require('../services/identity');
+const requireAdmin = require('../middleware/requireAdmin');
+const rateLimit = require('../middleware/rateLimit');
 
 const VOTER_ID_RE = /^[A-Z0-9-]{4,20}$/;
-const GENDERS = ['', 'Male', 'Female', 'Other'];
+const NAME_RE = /^\p{L}[\p{L}\p{M}\s.'-]{1,98}$/u;
+const GENDERS = ['Male', 'Female', 'Other'];
+const MIN_AGE = 18, MAX_AGE = 120;
+const PENDING_RECLAIM_MS = 60 * 60 * 1000;      // an abandoned half-finished registration frees its ID after 1 hour
 const MIN_IMAGES = 3, MAX_IMAGES = 5, MAX_IMAGE_CHARS = 3 * 1024 * 1024;
 const B64_RE = /^[A-Za-z0-9+/=\s]+$/;
 
 const fail = (res, status, message, extra = {}) => res.status(status).json({ success: false, message, ...extra });
-const audit = (voter_id, action) =>
-    db.query("INSERT INTO audit_log (voter_id, action) VALUES (?, ?)", [voter_id, action]).catch(e => console.error('audit failed:', e.message));
+// Field-level validation errors: { field: { code, message } } – the UI shows each beside its field.
+const fieldFail = (res, status, errors) => {
+    const first = Object.values(errors)[0];
+    return res.status(status).json({ success: false, code: first.code, message: first.message, errors });
+};
 const validImage = s => typeof s === 'string' && s.length > 100 && s.length <= MAX_IMAGE_CHARS && B64_RE.test(s);
 
-// Step 1 – voter details. Re-submitting for a voter who has NOT yet registered a face
-// resumes/updates that pending registration; a fully registered voter is a duplicate.
-router.post('/register', async (req, res) => {
+// Same rules the browser applies – the server never trusts the browser's validation.
+function validateDetails(body) {
+    const voter_id = String(body.voter_id ?? '').trim().toUpperCase();
+    const name = String(body.name ?? '').trim().replace(/\s+/g, ' ');
+    const address = String(body.address ?? '').trim();
+    const gender = String(body.gender ?? '').trim();
+    const ageRaw = typeof body.age === 'string' ? body.age.trim() : body.age;
+    const age = ageRaw === '' || ageRaw === null || ageRaw === undefined ? NaN : Number(ageRaw);
+    const e = {};
+    if (!voter_id) e.voter_id = { code: 'ID_REQUIRED', message: 'Please enter your Voter ID.' };
+    else if (!VOTER_ID_RE.test(voter_id)) e.voter_id = { code: 'ID_FORMAT', message: 'Voter ID must be 4-20 letters, digits or hyphens.' };
+    if (!name) e.name = { code: 'NAME_REQUIRED', message: 'Please enter your full name.' };
+    else if (name.length < 2 || name.length > 100 || !NAME_RE.test(name) || (name.match(/\p{L}/gu) || []).length < 2)
+        e.name = { code: 'NAME_INVALID', message: 'Enter a valid full name (letters, spaces, . - \' only).' };
+    if (ageRaw === '' || ageRaw === null || ageRaw === undefined) e.age = { code: 'AGE_REQUIRED', message: 'Please enter your age.' };
+    else if (!Number.isInteger(age) || age > MAX_AGE || age < 1) e.age = { code: 'AGE_INVALID', message: 'Enter a valid age.' };
+    else if (age < MIN_AGE) e.age = { code: 'AGE_MIN', message: 'Age must be 18 or above.' };
+    if (!address) e.address = { code: 'ADDRESS_REQUIRED', message: 'Please enter your address.' };
+    else if (address.length < 5) e.address = { code: 'ADDRESS_SHORT', message: 'Please enter your full address.' };
+    else if (address.length > 500) e.address = { code: 'ADDRESS_LONG', message: 'Address is too long.' };
+    if (!GENDERS.includes(gender)) e.gender = { code: 'GENDER_INVALID', message: 'Please select a gender.' };
+    return { voter_id, name, age, gender, address, errors: e };
+}
+
+// Optional constituency the voter declares. It is never inferred; if given it must exist, be active and sit in the stated state.
+async function resolveLocation(body) {
+    const cid = body.constituency_id === undefined || body.constituency_id === null || body.constituency_id === '' ? null : Number(body.constituency_id);
+    const sid = body.state_id === undefined || body.state_id === null || body.state_id === '' ? null : Number(body.state_id);
+    if (cid === null) {
+        if (sid !== null && !Number.isInteger(sid)) return { error: { state_id: { code: 'STATE_INVALID', message: 'Select a valid state.' } } };
+        if (sid !== null) { const [r] = await db.query('SELECT state_id FROM states WHERE state_id = ?', [sid]); if (!r.length) return { error: { state_id: { code: 'STATE_INVALID', message: 'Select a valid state.' } } }; }
+        return { state_id: sid, constituency_id: null };
+    }
+    if (!Number.isInteger(cid)) return { error: { constituency_id: { code: 'CONSTITUENCY_INVALID', message: 'Select a valid constituency.' } } };
+    const [r] = await db.query('SELECT state_id FROM constituencies WHERE constituency_id = ? AND is_active', [cid]);
+    if (!r.length || (sid !== null && r[0].state_id !== sid)) return { error: { constituency_id: { code: 'CONSTITUENCY_INVALID', message: 'That constituency does not belong to the selected state.' } } };
+    return { state_id: r[0].state_id, constituency_id: cid };
+}
+
+// Registration ticket: proves this browser started the registration for voter_id.
+function regVoter(req) {
+    const id = tokens.verify('reg', tokens.bearer(req));
+    return id && VOTER_ID_RE.test(id) ? id : null;
+}
+const requireReg = (req, res, next) => {
+    const id = regVoter(req);
+    if (!id) return fail(res, 401, 'Registration session expired. Please start again.', { code: 'REG_SESSION' });
+    req.regVoter = id; next();
+};
+
+// Step 1 – voter details. Creates (or resumes) a PENDING registration and returns a ticket.
+router.post('/register', rateLimit('register', 30, 15 * 60 * 1000), async (req, res) => {
     try {
-        const body = req.body || {};
-        const voter_id = String(body.voter_id || '').trim().toUpperCase();
-        const name = String(body.name || '').trim().replace(/\s+/g, ' ');
-        const age = Number(body.age);
-        const gender = String(body.gender || '').trim();
-        const address = String(body.address || '').trim();
-
-        if (!VOTER_ID_RE.test(voter_id)) return fail(res, 400, "Voter ID must be 4-20 letters, digits or hyphens");
-        if (name.length < 2 || name.length > 100) return fail(res, 400, "Enter the voter's full name (2-100 characters)");
-        if (!Number.isInteger(age) || age < 1 || age > 120) return fail(res, 400, "Enter a valid age");
-        if (!GENDERS.includes(gender)) return fail(res, 400, "Invalid gender value");
-        if (address.length > 500) return fail(res, 400, "Address is too long");
-
-        // Eligibility rule for now: 18+. (Per-election eligibility arrives with election management.)
-        if (age < 18) {
-            await audit(voter_id, 'REGISTRATION_REJECTED:UNDERAGE');
-            return fail(res, 400, "Must be 18 or older to register");
+        const v = validateDetails(req.body || {});
+        if (Object.keys(v.errors).length) {
+            if (v.errors.age?.code === 'AGE_MIN' && VOTER_ID_RE.test(v.voter_id)) await audit(v.voter_id, 'REGISTRATION_REJECTED:UNDERAGE');
+            return fieldFail(res, 400, v.errors);
         }
+        const { voter_id, name, age, gender, address } = v;
+        const loc = await resolveLocation(req.body || {});
+        if (loc.error) return fieldFail(res, 400, loc.error);
+        const dup = { voter_id: { code: 'ID_EXISTS', message: 'Voter ID already exists.' } };
 
-        const [exist] = await db.query("SELECT face_encoding IS NOT NULL AS has_face FROM voters WHERE voter_id = ?", [voter_id]);
+        const [exist] = await db.query("SELECT face_encoding IS NOT NULL AS has_face, registered_at FROM voters WHERE voter_id = ?", [voter_id]);
         if (exist.length > 0) {
-            if (exist[0].has_face) return fail(res, 409, "Voter ID already registered");
-            await db.query("UPDATE voters SET name=?, age=?, gender=?, address=?, is_eligible=TRUE WHERE voter_id=?",
-                [name, age, gender, address, voter_id]);
-            return res.json({ success: true, resumed: true, voter_id, message: "Registration was incomplete – continue with face capture" });
+            if (exist[0].has_face) { await audit(voter_id, 'REGISTRATION_REJECTED:ID_EXISTS'); return fieldFail(res, 409, dup); }
+            const mine = regVoter(req) === voter_id;
+            // registered_at is written from this server's clock (see INSERT), so comparing with Date.now() is consistent
+            const stale = Date.now() - new Date(exist[0].registered_at).getTime() > PENDING_RECLAIM_MS;
+            if (!mine && !stale)
+                return fieldFail(res, 409, { voter_id: { code: 'ID_PENDING', message: 'Voter ID already exists (registration in progress). Try again later or contact an administrator.' } });
+            await db.query("UPDATE voters SET name=?, age=?, gender=?, address=?, state_id=?, constituency_id=?, is_eligible=TRUE, registered_at=? WHERE voter_id=?", [name, age, gender, address, loc.state_id, loc.constituency_id, new Date(), voter_id]);
+            if (!mine) await db.query("DELETE FROM identity_verifications WHERE voter_id = ?", [voter_id]);   // reclaimed ID: old identity proof is not inherited
+            return res.json({ success: true, resumed: true, voter_id, registration_token: tokens.signReg(voter_id),
+                message: 'Details saved. Continue with the next step.' });
         }
 
         try {
-            await db.query("INSERT INTO voters (voter_id, name, age, gender, address, is_eligible) VALUES (?, ?, ?, ?, ?, TRUE)",
-                [voter_id, name, age, gender, address]);
+            await db.query("INSERT INTO voters (voter_id, name, age, gender, address, state_id, constituency_id, is_eligible, registered_at) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?)", [voter_id, name, age, gender, address, loc.state_id, loc.constituency_id, new Date()]);
         } catch (e) {
-            if (e.code === 'ER_DUP_ENTRY') return fail(res, 409, "Voter ID already registered");
+            if (e.code === 'ER_DUP_ENTRY') { await audit(voter_id, 'REGISTRATION_REJECTED:ID_EXISTS'); return fieldFail(res, 409, dup); }   // double-click / parallel request
             throw e;
         }
         await audit(voter_id, 'REGISTERED');
-        res.json({ success: true, voter_id, message: `Voter ${name} registered. Now capture the face.` });
+        res.json({ success: true, voter_id, registration_token: tokens.signReg(voter_id), message: `Details saved for ${name}. Continue with the next step.` });
     } catch (e) {
-        console.error('register error:', e);
-        fail(res, 500, "Registration failed. Please try again.");
+        console.error('register error:', e);   // full cause goes to the server terminal only
+        await audit(null, 'REGISTRATION_FAILED:SERVER_ERROR');
+        const schema = ['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE'].includes(e.code);
+        fail(res, 500, schema ? 'Server database is out of date. Ask the administrator to run "npm run migrate" in the server folder.' : 'Registration failed. Please try again.',
+            { code: schema ? 'DB_SCHEMA' : 'SERVER_ERROR' });
     }
 });
 
 // Live per-frame feedback during capture. Nothing is stored.
-router.post('/check-face', async (req, res) => {
+router.post('/check-face', rateLimit('check-face', 240, 10 * 60 * 1000), async (req, res) => {
     try {
         const { image } = req.body || {};
-        if (!validImage(image)) return fail(res, 400, "Invalid image");
+        if (!validImage(image)) return fail(res, 400, "Invalid image", { code: 'INVALID_IMAGE' });
         const r = await ai.post('/check-face', { image });
         res.status(r.status).json(r.data);
     } catch (e) {
@@ -71,53 +130,69 @@ router.post('/check-face', async (req, res) => {
     }
 });
 
-// Step 2 – face template. Images are forwarded to the AI service, turned into an
-// encrypted embedding and discarded; no raw image is written anywhere.
-router.post('/register-face', async (req, res) => {
+// Step 3 – face template. Needs the registration ticket and (when enabled) a verified identity.
+// Images are forwarded to the AI service, turned into an encrypted embedding and discarded.
+router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), requireReg, async (req, res) => {
     try {
         const body = req.body || {};
-        const voter_id = String(body.voter_id || '').trim().toUpperCase();
+        const voter_id = req.regVoter;
+        if (body.voter_id && String(body.voter_id).trim().toUpperCase() !== voter_id) return fail(res, 403, 'This registration session belongs to a different Voter ID.', { code: 'ID_MISMATCH' });
         const images = body.images;
-        if (!VOTER_ID_RE.test(voter_id)) return fail(res, 400, "Invalid voter ID");
         if (!Array.isArray(images) || images.length < MIN_IMAGES || images.length > MAX_IMAGES || !images.every(validImage))
-            return fail(res, 400, `Send ${MIN_IMAGES}-${MAX_IMAGES} valid face images`);
+            return fail(res, 400, `Send ${MIN_IMAGES}-${MAX_IMAGES} valid face images`, { code: 'INVALID_IMAGE' });
 
         const [voter] = await db.query("SELECT voter_id FROM voters WHERE voter_id = ?", [voter_id]);
         if (voter.length === 0) return fail(res, 404, "Register voter details first");
+        if (identity.mode() === 'required' && !(await identity.isVerified(voter_id)))
+            return fail(res, 403, 'Verify your identity (OTP) before registering your face.', { code: 'IDENTITY_REQUIRED' });
 
         const r = await ai.post('/register-face', { voter_id, images });
-        if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); return fail(res, 503, "Face service is misconfigured"); }
+        if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); await audit(voter_id, 'FACE_REGISTRATION_FAILED:AI_MISCONFIGURED'); return fail(res, 503, "Face service is misconfigured. Ask the administrator to check INTERNAL_API_KEY in server/.env and python_ai/.env.", { code: 'AI_MISCONFIGURED' }); }
         if (r.data && r.data.success) await audit(voter_id, 'FACE_REGISTERED');
         else if (r.data && r.data.code) await audit(voter_id, `FACE_REGISTRATION_FAILED:${r.data.code}`);
         res.status(r.status).json(r.data);
     } catch (e) {
         console.error('register-face error:', e.message);
+        await audit(req.regVoter, 'FACE_REGISTRATION_FAILED:AI_UNAVAILABLE');
         fail(res, 503, "Face service is unavailable. Please try again shortly.");
     }
 });
 
-router.post('/authenticate', async (req, res) => {
-    const { face_image } = req.body || {};
+// Face login. Optional voter_id (what the voter typed on the login page) is enforced HERE:
+// the face must belong to that Voter ID. On success a short-lived session token is issued;
+// /votes/cast accepts only that token, never a voter_id from the browser.
+router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), async (req, res) => {
+    const { face_image, voter_id: claimed } = req.body || {};
     try {
         const aiRes = await ai.post('/authenticate', { image: face_image });
-        if (aiRes.status >= 500 || aiRes.status === 403) return res.json({ success: false, message: "Authentication service error. Please try again." });
-        if (!aiRes.data.success) return res.json(aiRes.data);
+        const typed = VOTER_ID_RE.test(String(claimed ?? '').trim().toUpperCase()) ? String(claimed).trim().toUpperCase() : null;   // unverified: only logged when well-formed
+        if (aiRes.status >= 500 || aiRes.status === 403) { await audit(typed, 'AUTH_FAILED:AI_ERROR'); return res.json({ success: false, code: 'AI_ERROR', message: "Authentication service error. Please try again." }); }
+        if (!aiRes.data.success) { await audit(typed, `AUTH_FAILED:${aiRes.data.code || 'NOT_RECOGNIZED'}`); return res.json(aiRes.data); }
         const { voter_id, voter_name, has_voted } = aiRes.data;
+        if (claimed && String(claimed).trim().toUpperCase() !== String(voter_id).toUpperCase()) {
+            await audit(voter_id, 'AUTH_ID_MISMATCH');
+            return res.status(403).json({ success: false, code: 'ID_MISMATCH', message: 'The verified face does not match the Voter ID you entered.' });
+        }
         if (has_voted) {
             await audit(voter_id, 'DUPLICATE_ATTEMPT');
-            return res.json({ success: false, already_voted: true, message: `${voter_name} has already voted!` });
+            return res.json({ success: false, already_voted: true, code: 'ALREADY_VOTED', message: `${voter_name} has already voted!` });
         }
         await audit(voter_id, 'AUTHENTICATED');
-        res.json(aiRes.data);
+        res.json({ ...aiRes.data, session_token: tokens.signVoter(voter_id) });
     } catch (e) {
         console.error('authenticate error:', e.message);
+        await audit(null, 'AUTH_FAILED:AI_UNAVAILABLE');
         res.json({ success: false, message: "Authentication service is unavailable. Please try again." });
     }
 });
 
-router.get('/all', async (req, res) => {
+router.get('/all', requireAdmin, async (req, res) => {
     try {
-        const [rows] = await db.query("SELECT voter_id, name, age, has_voted, is_eligible, face_encoding IS NOT NULL AS face_registered, registered_at FROM voters");
+        const [rows] = await db.query(`SELECT v.voter_id, v.name, v.age, v.has_voted, v.is_eligible, v.face_encoding IS NOT NULL AS face_registered,
+                COALESCE(i.status, 'NOT_STARTED') AS identity_status, v.registered_at,
+                v.state_id, v.constituency_id, s.name AS state_name, k.name AS constituency_name
+            FROM voters v LEFT JOIN identity_verifications i ON i.voter_id = v.voter_id
+            LEFT JOIN states s ON s.state_id = v.state_id LEFT JOIN constituencies k ON k.constituency_id = v.constituency_id ORDER BY v.registered_at DESC`);
         res.json(rows);
     } catch (e) {
         console.error('voters/all error:', e.message);
@@ -126,3 +201,4 @@ router.get('/all', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.requireReg = requireReg;

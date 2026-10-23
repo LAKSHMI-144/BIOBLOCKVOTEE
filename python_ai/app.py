@@ -154,6 +154,7 @@ def add_to_blockchain():
 
 
 @app.route("/blockchain-status", methods=["GET"])
+@internal_only
 def blockchain_status():
     return jsonify({
         "is_valid": voting_blockchain.is_valid(),
