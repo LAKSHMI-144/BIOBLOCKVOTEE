@@ -1,6 +1,12 @@
 // Formatting helpers shared by the admin pages (no components here, so Fast Refresh stays happy).
-export const PALETTE = ['#6b7bd6', '#3fae7c', '#d8a24f', '#d86b78', '#5aaed1', '#8f7bd6', '#d98f4f', '#4fb3a4', '#a3b86c', '#c27bb0']
+export const PALETTE = ['#d99a64', '#3fae7c', '#d8a24f', '#d86b78', '#5aaed1', '#8f7bd6', '#d98f4f', '#4fb3a4', '#a3b86c', '#c27bb0']
 export const colorAt = i => PALETTE[i % PALETTE.length]
+
+// Hide seed-only labels in presentation; the original values remain available to edit and in the database.
+export const displayCandidateName = name => String(name || '').replace(/^Demo Candidate\s*-\s*/, '')
+export const displayConstituencyName = name => String(name || '').replace(/^Demonstration\s+/, '')
+export const displayCandidatePosition = position => position === 'Demonstration candidate' ? '—' : position || '—'
+export const displayCandidateDescription = description => /^DEMO DATA - Fictional candidate for UI demonstration only; not an actual election candidate\.?$/.test(String(description || '')) ? '—' : description || '—'
 
 // Plain-language names for the audit event types the backend records. Unknown types are shown as recorded.
 export const EVENT_LABEL = {

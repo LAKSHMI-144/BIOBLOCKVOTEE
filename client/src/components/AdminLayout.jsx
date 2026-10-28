@@ -31,7 +31,7 @@ export default function AdminLayout() {
         <div className="bb-sidebar-brand">
           <div className="bb-brand-mark"><Logo /></div>
           <div>
-            <div className="bb-brand-name">BlockBioVote</div>
+            <div className="bb-brand-name">BioBlockVote</div>
             <div className="bb-brand-subtitle">Admin / Auditor</div>
           </div>
         </div>

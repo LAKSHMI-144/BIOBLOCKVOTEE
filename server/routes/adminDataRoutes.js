@@ -20,11 +20,17 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
                 COALESCE(SUM(c.description LIKE 'DEMO DATA - Fictional%'), 0) demo_candidates
             FROM candidates c LEFT JOIN parties p ON p.party_id = c.party_id
             GROUP BY p.party_id, p.name ORDER BY candidates DESC, party_name`);
-        const [candidateCountsByState] = await db.query(`SELECT COALESCE(s.state_id, 0) state_id, COALESCE(s.name, 'Unassigned') state_name, COUNT(*) candidates,
+        const [candidateCountsByState] = await db.query(`SELECT s.state_id, s.name state_name, s.kind, COUNT(c.candidate_id) candidates,
+                COALESCE(SUM(c.description LIKE 'DEMO DATA - Fictional%'), 0) demo_candidates
+            FROM states s LEFT JOIN constituencies k ON k.state_id = s.state_id
+            LEFT JOIN candidates c ON c.constituency_id = k.constituency_id
+            GROUP BY s.state_id, s.name, s.kind
+            UNION ALL
+            SELECT 0 state_id, 'Unassigned' state_name, NULL kind, COUNT(c.candidate_id) candidates,
                 COALESCE(SUM(c.description LIKE 'DEMO DATA - Fictional%'), 0) demo_candidates
             FROM candidates c LEFT JOIN constituencies k ON k.constituency_id = c.constituency_id
-            LEFT JOIN states s ON s.state_id = k.state_id
-            GROUP BY s.state_id, s.name ORDER BY candidates DESC, state_name`);
+            WHERE k.state_id IS NULL HAVING COUNT(c.candidate_id) > 0
+            ORDER BY candidates DESC, state_name`);
         const [[a]] = await db.query(`SELECT COUNT(*) total, COALESCE(SUM(DATE(timestamp) = CURDATE()),0) today, COALESCE(SUM(status='FAILED'),0) failed, COALESCE(SUM(status='DENIED'),0) denied FROM audit_log`).then(([x]) => [x]);
         const [recent] = await db.query("SELECT id, voter_id, actor, action, event_type, status, details, timestamp FROM audit_log ORDER BY id DESC LIMIT 8");
         const e = await election.current();

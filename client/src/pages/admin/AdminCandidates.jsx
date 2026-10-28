@@ -3,6 +3,7 @@ import { adminApi, errText } from '../../api'
 import useLoad from '../../hooks/useLoad'
 import State from '../../components/State'
 import Modal from '../../components/Modal'
+import { displayCandidateDescription, displayCandidateName, displayCandidatePosition, displayConstituencyName } from '../../lib/adminFormat'
 
 const EMPTY = { name: '', symbol: '', position: '', description: '', state_id: '', constituency_id: '', party_id: '', status: 'ACTIVE' }
 const first = (o = {}) => Object.keys(o).length
@@ -41,7 +42,7 @@ export default function AdminCandidates() {
   const done = msg => { setDialog(null); setFlash({ type: 'ok', text: msg }); reload() }
 
   const toggle = async c => {
-    try { await adminApi.post(`/admin/candidates/${c.candidate_id}/active`, { active: !c.is_active }); done(`${c.name} ${c.is_active ? 'deactivated' : 'activated'}.`) }
+    try { await adminApi.post(`/admin/candidates/${c.candidate_id}/active`, { active: !c.is_active }); done(`${displayCandidateName(c.name)} ${c.is_active ? 'deactivated' : 'activated'}.`) }
     catch (e) { setDialog(null); setFlash({ type: 'bad', text: errText(e, 'Could not change the candidate status.') }) }
   }
 
@@ -54,9 +55,9 @@ export default function AdminCandidates() {
   const row = c => (
     <tr key={c.candidate_id}>
       <td>#{c.candidate_id}</td>
-      <td><div className="bb-entity-cell"><span className="bb-entity-bullet">{(c.name || '?')[0].toUpperCase()}</span><div><strong>{c.name}</strong>{c.symbol && <small>{c.symbol}</small>}</div></div></td>
+      <td><div className="bb-entity-cell"><span className="bb-entity-bullet">{(displayCandidateName(c.name) || '?')[0].toUpperCase()}</span><div><strong>{displayCandidateName(c.name)}</strong>{c.symbol && <small>{c.symbol}</small>}</div></div></td>
       <td>{c.party_abbr ? <span title={c.party_name}>{c.party_abbr}</span> : <span className="bb-badge warn">Unassigned</span>}</td>
-      <td>{c.state_name || '—'}</td><td>{c.constituency_name || '—'}</td><td>{c.position || '—'}</td><td>{Number(c.vote_count)}</td>
+      <td>{c.state_name || '—'}</td><td>{displayConstituencyName(c.constituency_name) || '—'}</td><td>{displayCandidatePosition(c.position)}</td><td>{Number(c.vote_count)}</td>
       <td><span className={`bb-badge ${c.is_active ? 'success' : 'muted'}`}>{c.is_active ? 'Active' : 'Inactive'}</span></td>
       <td><div className="bb-actions">
         <button type="button" className="bb-button ghost" onClick={() => setDialog({ kind: 'view', candidate: c })}>View</button>
@@ -98,7 +99,7 @@ export default function AdminCandidates() {
             <option value="">All states / UTs</option>{(states.data || []).map(s => <option key={s.state_id} value={s.state_id}>{s.name}</option>)}
           </select>
           <select className="bb-input" aria-label="Filter by constituency" value={filters.constituency_id} onChange={e => set('constituency_id', e.target.value)}>
-            <option value="">All constituencies</option>{consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{c.name}</option>)}
+            <option value="">All constituencies</option>{consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{displayConstituencyName(c.name)}</option>)}
           </select>
           <select className="bb-input" aria-label="Filter by party" value={filters.party_id} onChange={e => set('party_id', e.target.value)}>
             <option value="">All parties</option>{(parties.data || []).map(p => <option key={p.party_id} value={p.party_id}>{p.abbreviation}</option>)}
@@ -128,7 +129,7 @@ export default function AdminCandidates() {
         <Modal title="Deactivate candidate?" onClose={() => setDialog(null)} footer={<>
           <button type="button" className="bb-button ghost" onClick={() => setDialog(null)}>Cancel</button>
           <button type="button" className="bb-button danger" onClick={() => toggle(dialog.candidate)}>Deactivate</button></>}>
-          <p>{dialog.candidate.name} will disappear from ballots for new voting sessions. {dialog.candidate.has_votes ? `The ${dialog.candidate.vote_count} vote(s) already recorded are kept.` : 'No votes have been recorded for this candidate.'} You can activate the candidate again later.</p>
+          <p>{displayCandidateName(dialog.candidate.name)} will disappear from ballots for new voting sessions. {dialog.candidate.has_votes ? `The ${dialog.candidate.vote_count} vote(s) already recorded are kept.` : 'No votes have been recorded for this candidate.'} You can activate the candidate again later.</p>
         </Modal>
       )}
     </div>
@@ -136,9 +137,9 @@ export default function AdminCandidates() {
 }
 
 function ViewDialog({ c, onClose }) {
-  const rows = [['Candidate ID', `#${c.candidate_id}`], ['Name', c.name], ['Party', c.party_name ? `${c.party_name} (${c.party_abbr})` : 'Unassigned'], ['Symbol', c.symbol || '—'],
-    ['State / UT', c.state_name || '—'], ['Constituency', c.constituency_name ? `${c.constituency_name} (${c.constituency_kind?.toLowerCase()})` : '—'], ['Election', c.election_name || '—'],
-    ['Position', c.position || '—'], ['Status', c.is_active ? 'Active' : 'Inactive'], ['Votes recorded', c.vote_count], ['Description', c.description || '—']]
+  const rows = [['Candidate ID', `#${c.candidate_id}`], ['Name', displayCandidateName(c.name)], ['Party', c.party_name ? `${c.party_name} (${c.party_abbr})` : 'Unassigned'], ['Symbol', c.symbol || '—'],
+    ['State / UT', c.state_name || '—'], ['Constituency', c.constituency_name ? `${displayConstituencyName(c.constituency_name)} (${c.constituency_kind?.toLowerCase()})` : '—'], ['Election', c.election_name || '—'],
+    ['Position', displayCandidatePosition(c.position)], ['Status', c.is_active ? 'Active' : 'Inactive'], ['Votes recorded', c.vote_count], ['Description', displayCandidateDescription(c.description)]]
   return (
     <Modal title="Candidate details" onClose={onClose} footer={<button type="button" className="bb-button" onClick={onClose}>Close</button>}>
       <dl className="bb-dl">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
@@ -195,7 +196,7 @@ function CandidateForm({ candidate, election, states, onClose, onSaved }) {
         {fld('state_id', 'State / UT *', <select id="c-state_id" className="bb-input" value={f.state_id} disabled={identityLocked} onChange={e => up('state_id', e.target.value)}>
           <option value="">Select state / UT</option>{states.map(s => <option key={s.state_id} value={s.state_id}>{s.name}</option>)}</select>)}
         {fld('constituency_id', 'Constituency *', <select id="c-constituency_id" className="bb-input" value={f.constituency_id} disabled={identityLocked || !f.state_id} onChange={e => up('constituency_id', e.target.value)}>
-          <option value="">Select constituency</option>{consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{c.name}</option>)}</select>)}
+          <option value="">Select constituency</option>{consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{displayConstituencyName(c.name)}</option>)}</select>)}
         {fld('party_id', 'Party *', <select id="c-party_id" className="bb-input" value={f.party_id} disabled={identityLocked || !f.state_id} onChange={e => up('party_id', e.target.value)}>
           <option value="">Select party</option>{parties.map(p => <option key={p.party_id} value={p.party_id}>{p.name} ({p.abbreviation})</option>)}</select>)}
         <div className="bb-fgrid-row">

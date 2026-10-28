@@ -10,7 +10,7 @@
   --border: #223041;
   --text: #e6ebf3;
   --muted: #8b9ab0;
-  --accent: #6b7bd6;
+  --accent: #d99a64;
   --ok: #3fae7c;
   --warn: #d8a24f;
   --bad: #d86b78;
@@ -21,11 +21,11 @@
 
 /* ---------- shell: flatten theme.css gradients ---------- */
 .bb-admin-shell .bb-admin-sidebar { background: #0d131c; border-right: 1px solid var(--border); width: 248px; }
-.bb-admin-shell .bb-brand-mark { background: rgba(107, 123, 214, .14); border: 1px solid rgba(107, 123, 214, .3); border-radius: 8px; }
+.bb-admin-shell .bb-brand-mark { background: rgba(217, 154, 100, .14); border: 1px solid rgba(217, 154, 100, .3); border-radius: 8px; }
 .bb-admin-shell .bb-brand-name { font-size: 17px; }
 .bb-admin-shell .bb-nav-item { font-size: 14px; padding: 9px 12px; border-radius: 6px; color: #c3cddb; }
 .bb-admin-shell .bb-nav-item:hover { background: rgba(255, 255, 255, .04); border-color: transparent; color: var(--text); }
-.bb-admin-shell .bb-nav-item.active { background: rgba(107, 123, 214, .14); border-color: transparent; box-shadow: inset 2px 0 0 var(--accent); color: #fff; }
+.bb-admin-shell .bb-nav-item.active { background: rgba(217, 154, 100, .14); border-color: transparent; box-shadow: inset 2px 0 0 var(--accent); color: #fff; }
 .bb-admin-shell .bb-logout { background: transparent; border-radius: 6px; color: #c3cddb; }
 .bb-admin-shell .bb-logout:hover { background: rgba(255, 255, 255, .04); color: #fff; }
 .bb-admin-shell .bb-admin-topbar { background: #0d131c; padding: 12px 24px; }
@@ -58,7 +58,7 @@
 .bb-admin-shell .bb-button.primary, .bb-admin-shell .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .bb-admin-shell .bb-button.primary:hover:not(:disabled), .bb-admin-shell .btn.primary:hover:not(:disabled) { background: #7a89e0; border-color: #7a89e0; }
 .bb-admin-shell .bb-button.ghost, .bb-admin-shell .btn.secondary { background: transparent; }
-.bb-admin-shell .bb-button.subtle { background: rgba(107, 123, 214, .1); border-color: rgba(107, 123, 214, .25); color: #d5dbf7; }
+.bb-admin-shell .bb-button.subtle { background: rgba(217, 154, 100, .1); border-color: rgba(217, 154, 100, .25); color: #f0d2b7; }
 .bb-admin-shell .bb-button.danger, .bb-admin-shell .btn.danger { background: rgba(216, 107, 120, .1); border-color: rgba(216, 107, 120, .3); color: #f0b4bc; }
 .bb-admin-shell .bb-button:disabled, .bb-admin-shell .btn:disabled { opacity: .5; cursor: not-allowed; }
 .bb-admin-shell .bb-button:focus-visible, .bb-admin-shell .btn:focus-visible, .bb-admin-shell .bb-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -88,8 +88,8 @@
 /* ---------- metric + status cards ---------- */
 .bb-metric-card { padding: 14px 16px; }
 .bb-metric-top { display: flex; align-items: center; gap: 10px; }
-.bb-metric-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: rgba(107, 123, 214, .14); color: #aab4f0; flex: none; }
-.bb-metric-icon.purple { background: rgba(143, 123, 214, .14); color: #bfb2ee; }
+.bb-metric-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: rgba(217, 154, 100, .14); color: #f0bd91; flex: none; }
+.bb-metric-icon.purple { background: rgba(217, 154, 100, .12); color: #f0c39b; }
 .bb-metric-icon.green { background: rgba(63, 174, 124, .14); color: #7fd3ac; }
 .bb-metric-icon.amber { background: rgba(216, 162, 79, .14); color: #e6c088; }
 .bb-metric-label { font-size: 12px; color: var(--muted); }
@@ -248,7 +248,7 @@
 .bb-dashboard-shell .bb-metrics-grid { gap: 10px; }
 .bb-dashboard-shell .bb-metric-card { position: relative; overflow: hidden; border-color: rgba(130, 151, 177, .18); background: linear-gradient(145deg, #151f2c, #101720 72%); }
 .bb-dashboard-shell .bb-metric-card:after { content: ""; position: absolute; inset: auto -25px -46px auto; width: 110px; height: 110px; border-radius: 50%; background: currentColor; opacity: .035; }
-.bb-dashboard-shell .bb-metric-icon.indigo { color: #aab8ff; background: rgba(107, 123, 214, .18); }
+.bb-dashboard-shell .bb-metric-icon.indigo { color: #f0bd91; background: rgba(217, 154, 100, .18); }
 .bb-dashboard-shell .bb-dashboard-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding: 14px 4px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .bb-dashboard-status > div { display: grid; gap: 4px; min-width: 0; }
 .bb-dashboard-status span { color: var(--muted); font-size: 10px; letter-spacing: .09em; text-transform: uppercase; }
@@ -262,6 +262,7 @@
 .bb-dashboard-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .bb-dashboard-chart-grid > .bb-panel { min-width: 0; }
 .bb-dashboard-state-chart, .bb-dashboard-votes-chart { max-height: 330px; overflow-y: auto; padding-right: 4px; }
+.bb-dashboard-state-chart { max-height: 430px; }
 .bb-dashboard-state-chart .bb-hbar-row { grid-template-columns: minmax(90px, 190px) 1fr 40px; }
 .bb-dashboard-chart-grid .bb-donut-layout { align-items: center; }
 .bb-dashboard-status a { color: #aab8ff; }

@@ -5,6 +5,7 @@ import { useNavigate, Navigate } from 'react-router-dom'
 import { useVoter } from '../voterContext'
 import { useT } from '../i18n/i18nContext'
 import { API, apiError, bearer } from '../api'
+import { displayCandidateName, displayConstituencyName } from '../lib/adminFormat'
 
 // mode 'auth': face verification only, then on to the voter dashboard.
 // mode 'vote': candidate selection + confirmation (requires a verified voter).
@@ -94,14 +95,14 @@ export default function Vote({ mode = 'auth' }) {
         <div className="card">
           <p className="hint" style={{ marginBottom: 12 }}>{t('vote.voter', { name: voter?.name, id: voter?.id })}</p>
           {closed && <p className="msg error" role="alert" style={{ textAlign: 'left' }}>{t('vote.closed')}</p>}
-          {ballot && <p className="hint" style={{ marginBottom: 12 }}>{t('vote.ballotFor', { constituency: ballot.name, state: ballot.state })}</p>}
+          {ballot && <p className="hint" style={{ marginBottom: 12 }}>{t('vote.ballotFor', { constituency: displayConstituencyName(ballot.name), state: ballot.state })}</p>}
           <h3 style={{ marginBottom: 12 }}>{t('vote.select')}</h3>
           {candidates.length === 0 && !noBallot && <p className="hint">{t('vote.noCandidates')}</p>}
           {candidates.map(c => (
             <label key={c.candidate_id} className="cand-option">
-              <input type="radio" name="cand" value={`${c.candidate_id}:${c.name}`} disabled={closed} onChange={e => setSelected(e.target.value)} style={{ width: 18, height: 18 }} />
+              <input type="radio" name="cand" value={`${c.candidate_id}:${displayCandidateName(c.name)}`} disabled={closed} onChange={e => setSelected(e.target.value)} style={{ width: 18, height: 18 }} />
               <div>
-                <span className="cand-name">{c.symbol} {c.name}</span>
+                <span className="cand-name">{c.symbol} {displayCandidateName(c.name)}</span>
                 <span className="cand-party">{c.party}{c.party_abbr && c.party_abbr !== c.party ? ` (${c.party_abbr})` : ''}</span>
               </div>
             </label>

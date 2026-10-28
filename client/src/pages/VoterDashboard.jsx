@@ -23,7 +23,7 @@ export default function VoterDashboard() {
     <>
       <header className="bb-header">
         <div className="bb-wrap">
-          <span className="bb-brand"><Logo />BlockBioVote</span>
+          <span className="bb-brand"><Logo />BioBlockVote</span>
           <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <LanguageSwitcher />
             <button className="btn secondary" style={{ padding: '7px 14px' }} onClick={out}>{t('common.logout')}</button>

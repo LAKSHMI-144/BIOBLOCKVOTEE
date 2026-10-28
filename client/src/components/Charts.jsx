@@ -9,13 +9,16 @@ export function DonutChart({ items, centerLabel = 'votes', emptyTitle = 'No vote
   if (total === 0) return <div className="bb-empty-state"><div className="bb-empty-title">{emptyTitle}</div><div className="bb-empty-text">{emptyText}</div></div>
   const shown = items.filter(i => i.value > 0)
   const starts = shown.map((_, k) => shown.slice(0, k).reduce((n, x) => n + (x.value / total) * C, 0))
+  const share = value => Math.round((value / total) * 1000) / 10
   return (
     <div className="bb-donut-layout">
       <svg className="bb-donut-svg" viewBox="0 0 140 140" role="img" aria-label={`${ariaLabel}: ${items.map(i => `${i.label} ${i.value}`).join(', ')}`}>
         <circle cx="70" cy="70" r={R} fill="none" stroke="var(--surface2)" strokeWidth="18" />
         {shown.map((i, k) => (
           <circle key={i.key ?? i.label} cx="70" cy="70" r={R} fill="none" stroke={i.color ?? colorAt(items.indexOf(i))} strokeWidth="18"
-            strokeDasharray={`${(i.value / total) * C} ${C - (i.value / total) * C}`} strokeDashoffset={-starts[k]} transform="rotate(-90 70 70)" />
+            strokeDasharray={`${(i.value / total) * C} ${C - (i.value / total) * C}`} strokeDashoffset={-starts[k]} transform="rotate(-90 70 70)">
+            <title>{`${i.label}: ${i.value} (${share(i.value)}%)`}</title>
+          </circle>
         ))}
         <text x="70" y="68" textAnchor="middle" className="bb-donut-num">{total}</text>
         <text x="70" y="84" textAnchor="middle" className="bb-donut-sub">{centerLabel}</text>
@@ -24,9 +27,9 @@ export function DonutChart({ items, centerLabel = 'votes', emptyTitle = 'No vote
         {items.map((i, idx) => (
           <div key={i.key ?? i.label} className="bb-legend-row">
             <span className="bb-legend-dot" style={{ background: i.color ?? colorAt(idx) }} />
-            <span className="bb-legend-name" title={i.label}>{i.label}</span>
+            <span className="bb-legend-name" title={`${i.label}: ${i.value} (${share(i.value)}%)`}>{i.label}</span>
             <span className="bb-legend-count">{i.value}</span>
-            <span className="bb-legend-percent">{Math.round((i.value / total) * 100)}%</span>
+            <span className="bb-legend-percent">{share(i.value)}%</span>
           </div>
         ))}
       </div>
@@ -41,9 +44,9 @@ export function BarChart({ items, unit = 'votes', emptyTitle = 'No votes yet', e
   return (
     <div className="bb-hbars" role="img" aria-label={`${unit} per item: ${items.map(i => `${i.label} ${i.value}`).join(', ')}`}>
       {items.map((i, idx) => (
-        <div key={i.key ?? i.label} className="bb-hbar-row">
+        <div key={i.key ?? i.label} className="bb-hbar-row" title={`${i.label}: ${i.value} ${unit}`}>
           <span className="bb-hbar-label" title={i.label}>{i.label}</span>
-          <span className="bb-hbar-track"><span className="bb-hbar-fill" style={{ width: `${(i.value / max) * 100}%`, background: i.color ?? colorAt(idx) }} /></span>
+          <span className="bb-hbar-track"><span className="bb-hbar-fill" style={{ width: `${(i.value / max) * 100}%`, minWidth: i.value > 0 ? undefined : 0, background: i.color ?? colorAt(idx) }} /></span>
           <span className="bb-hbar-value">{i.value}</span>
         </div>
       ))}

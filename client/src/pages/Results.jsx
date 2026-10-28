@@ -3,7 +3,7 @@ import { adminApi } from '../api'
 import useLoad from '../hooks/useLoad'
 import State from '../components/State'
 import { DonutChart, BarChart } from '../components/Charts'
-import { colorAt, pct } from '../lib/adminFormat'
+import { colorAt, displayCandidateName, displayConstituencyName, pct } from '../lib/adminFormat'
 
 // Aggregate results only: candidate totals, never who voted for whom. Same tally (config/stats.js) as the dashboard.
 export default function Results() {
@@ -11,11 +11,11 @@ export default function Results() {
   const [cons, setCons] = useState('')
 
   const all = data?.candidates || []
-  const constituencies = [...new Map(all.filter(c => c.constituency_id).map(c => [c.constituency_id, `${c.constituency_name}, ${c.state_name}`])).entries()]
+  const constituencies = [...new Map(all.filter(c => c.constituency_id).map(c => [c.constituency_id, `${displayConstituencyName(c.constituency_name)}, ${c.state_name}`])).entries()]
   // Inactive candidates stay in the results only if they received votes (history is never hidden).
   const rows = all.filter(c => (c.is_active || c.votes > 0) && (!cons || String(c.constituency_id) === cons))
   const shown = rows.reduce((n, c) => n + c.votes, 0)
-  const items = rows.map((c, i) => ({ key: c.candidate_id, label: c.party_abbr ? `${c.name} (${c.party_abbr})` : c.name, value: c.votes, color: colorAt(i) }))
+  const items = rows.map((c, i) => ({ key: c.candidate_id, label: c.party_abbr ? `${displayCandidateName(c.name)} (${c.party_abbr})` : displayCandidateName(c.name), value: c.votes, color: colorAt(i) }))
   const byParty = {}
   rows.forEach(c => { const k = c.party_abbr || 'Unassigned'; byParty[k] = (byParty[k] || 0) + c.votes })
   const partyRows = Object.entries(byParty).map(([label, value], i) => ({ key: label, label, value, color: colorAt(i) })).sort((a, b) => b.value - a.value)
@@ -62,7 +62,7 @@ export default function Results() {
                 <thead><tr><th>Rank</th><th>Candidate</th><th>Party</th><th>Constituency</th><th>Votes</th><th>Percentage</th></tr></thead>
                 <tbody>{[...rows].sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name)).map((c, i) => (
                   <tr key={c.candidate_id}>
-                    <td>#{i + 1}</td><td>{c.name}{!c.is_active && <span className="bb-badge muted bb-ml">Inactive</span>}</td><td>{c.party_abbr || '—'}</td><td>{c.constituency_name || '—'}</td>
+                    <td>#{i + 1}</td><td>{displayCandidateName(c.name)}{!c.is_active && <span className="bb-badge muted bb-ml">Inactive</span>}</td><td>{c.party_abbr || '—'}</td><td>{displayConstituencyName(c.constituency_name) || '—'}</td>
                     <td>{c.votes}</td><td>{pct(c.votes, shown)}%</td>
                   </tr>))}</tbody>
               </table></div>

@@ -3,7 +3,7 @@ import { adminApi } from '../../api'
 import useLoad from '../../hooks/useLoad'
 import State from '../../components/State'
 import { DonutChart, BarChart } from '../../components/Charts'
-import { colorAt, fmtTime } from '../../lib/adminFormat'
+import { colorAt, displayCandidateName, fmtTime } from '../../lib/adminFormat'
 import { IconUsers, IconBallot, IconCheck, IconShield, IconRefresh } from '../../components/Icons'
 
 const Metric = ({ icon, label, value, hint, tone }) => (
@@ -18,22 +18,26 @@ export default function AdminDashboard() {
 
   const voteRows = (d?.by_candidate || []).map((c, i) => ({
     key: c.candidate_id,
-    label: c.party_abbr ? `${c.name} (${c.party_abbr})` : c.name,
+    label: c.party_abbr ? `${displayCandidateName(c.name)} (${c.party_abbr})` : displayCandidateName(c.name),
     value: Number(c.votes),
     color: colorAt(i)
   }))
   const partyRows = (d?.candidate_counts_by_party || []).map((p, i) => ({
     key: p.party_id,
-    label: p.demo_candidates ? `${p.party_name} (${p.demo_candidates} fictional demo)` : p.party_name,
+    label: p.party_name,
     value: Number(p.candidates),
     color: colorAt(i)
   }))
   const stateRows = (d?.candidate_counts_by_state || []).map((s, i) => ({
     key: s.state_id,
-    label: s.demo_candidates ? `${s.state_name} (${s.demo_candidates} fictional demo)` : s.state_name,
+    label: s.kind === 'UT' ? `${s.state_name} (UT)` : s.state_name,
     value: Number(s.candidates),
     color: colorAt(i)
   }))
+  const namedRegions = stateRows.filter(s => s.key !== 0)
+  const stateCount = d?.candidate_counts_by_state?.filter(s => s.kind === 'STATE').length || 0
+  const utCount = d?.candidate_counts_by_state?.filter(s => s.kind === 'UT').length || 0
+  const zeroCandidateRegions = namedRegions.filter(s => s.value === 0).length
   const participationRows = d ? [
     { label: 'Voted', value: Number(d.voters.voted), color: '#46b985' },
     { label: 'Yet to vote', value: Number(d.voters.remaining_eligible), color: '#e1a653' }
@@ -99,7 +103,7 @@ export default function AdminDashboard() {
               <DonutChart items={partyRows} centerLabel="candidates" emptyTitle="No candidate data available" emptyText="Candidate counts appear when candidate records are added." ariaLabel="Candidate records by party" />
             </section>
             <section className="bb-panel">
-              <div className="bb-panel-header"><span>Candidates by state / UT</span><small>candidate records</small></div>
+              <div className="bb-panel-header"><span>Candidates by state / UT</span><small>{stateCount} states + {utCount} UTs · {zeroCandidateRegions} with 0</small></div>
               <div className="bb-dashboard-state-chart">
                 <BarChart items={stateRows} unit="candidates" emptyTitle="No candidate data available" emptyText="State totals appear when candidates are assigned to a constituency." />
               </div>

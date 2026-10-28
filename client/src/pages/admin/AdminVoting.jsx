@@ -2,7 +2,7 @@ import { adminApi } from '../../api'
 import useLoad from '../../hooks/useLoad'
 import State from '../../components/State'
 import { DonutChart, BarChart } from '../../components/Charts'
-import { colorAt } from '../../lib/adminFormat'
+import { colorAt, displayCandidateName } from '../../lib/adminFormat'
 
 // Counts and chart values come from database-backed admin/results and admin/dashboard-stats endpoints.
 export default function AdminVoting() {
@@ -20,7 +20,7 @@ export default function AdminVoting() {
   ]
   const candidateVotes = (r?.candidates || []).map((c, i) => ({
     key: c.candidate_id,
-    label: c.party_abbr ? `${c.name} (${c.party_abbr})` : c.name,
+    label: c.party_abbr ? `${displayCandidateName(c.name)} (${c.party_abbr})` : displayCandidateName(c.name),
     value: Number(c.vote_count || 0),
     color: colorAt(i)
   })).sort((a, b) => b.value - a.value).slice(0, 8)
