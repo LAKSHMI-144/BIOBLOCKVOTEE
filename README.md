@@ -30,6 +30,10 @@ Get-Content schema.sql | mysql -u root -p       # PowerShell
 If `mysql` is not recognised, use its full path (e.g. `C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe`) or run `schema.sql` in MySQL Workbench / the VS Code MySQL panel.
 Older database? The Node server now upgrades the schema itself on every start (adds missing columns/tables only, never drops or rewrites data) and prints what it changed. `cd server && npm run migrate` does the same on demand. A database created before `is_eligible` existed is exactly what caused "Registration failed. Please try again." earlier.
 
+### Optional illustrative candidate data
+
+After initializing the database, run `cd server && npm run seed-demo` to insert missing illustrative party, geography, and fictional candidate rows. The seed is repeatable and inserts only missing records; it does not delete or update existing records. Newly inserted demo candidates are inactive, have no election assigned, and are labelled as fictional in their descriptions. Existing rows retain their current fields. These are not real election candidates or an official candidate list.
+
 ### 2. Python AI service (port 5001)
 ```
 cd python_ai

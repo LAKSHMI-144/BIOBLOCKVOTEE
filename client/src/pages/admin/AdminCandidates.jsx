@@ -34,6 +34,7 @@ export default function AdminCandidates() {
   useEffect(() => { const t = setTimeout(() => setFilters(f => (f.q === search.trim() ? f : { ...f, q: search.trim() })), 300); return () => clearTimeout(t) }, [search])
 
   const set = (k, v) => setFilters(f => ({ ...f, [k]: v, ...(k === 'state_id' ? { constituency_id: '' } : {}) }))
+  const clearFilters = () => { setSearch(''); setFilters({ state_id: '', constituency_id: '', party_id: '', status: '', q: '' }) }
   const data = list.data || []
   const active = data.filter(c => c.is_active).length
   const votes = data.reduce((n, c) => n + Number(c.vote_count || 0), 0)
@@ -71,7 +72,7 @@ export default function AdminCandidates() {
   const locked = el && ['ACTIVE', 'ENDED'].includes(el.status)
 
   return (
-    <div className="bb-page-shell">
+    <div className="bb-page-shell bb-candidates-page">
       <header className="bb-page-header">
         <div>
           <div className="bb-page-kicker">Candidate management</div>
@@ -81,7 +82,7 @@ export default function AdminCandidates() {
         <button type="button" className="bb-button primary" disabled={!el || locked} title={locked ? `Candidates are locked while the election is ${el.status}` : ''} onClick={() => setDialog({ kind: 'add' })}>+ Add Candidate</button>
       </header>
 
-      <p className="note">Candidate names are entered by the administrator for this academic prototype. The system is not connected to the Election Commission of India, and the party list is an illustrative starting set.</p>
+      <p className="note">Ballot visibility depends on the election, candidate status, party status, and constituency assignments.</p>
       {flash && <div className={`bb-flash ${flash.type}`} role="status">{flash.text}<button type="button" className="bb-flash-x" aria-label="Dismiss" onClick={() => setFlash(null)}>×</button></div>}
 
       <div className="bb-summary-grid">
@@ -106,6 +107,7 @@ export default function AdminCandidates() {
             <option value="">Any status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option>
           </select>
           <label className="bb-check"><input type="checkbox" checked={group} onChange={e => setGroup(e.target.checked)} /> Group by party</label>
+          {first(query) > 0 && <button type="button" className="bb-button ghost" onClick={clearFilters}>Clear filters</button>}
         </div>
 
         <State loading={list.loading && !list.data} error={list.error} />

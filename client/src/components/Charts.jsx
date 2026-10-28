@@ -4,14 +4,14 @@ import { colorAt } from '../lib/adminFormat'
 const R = 52, C = 2 * Math.PI * R
 
 // items: [{ label, value }]; draws a doughnut + legend. total is the sum of values.
-export function DonutChart({ items, centerLabel = 'votes', emptyTitle = 'No votes yet', emptyText = 'The distribution appears after the first vote is recorded.' }) {
+export function DonutChart({ items, centerLabel = 'votes', emptyTitle = 'No votes yet', emptyText = 'The distribution appears after the first vote is recorded.', ariaLabel = 'Vote share' }) {
   const total = items.reduce((n, i) => n + i.value, 0)
   if (total === 0) return <div className="bb-empty-state"><div className="bb-empty-title">{emptyTitle}</div><div className="bb-empty-text">{emptyText}</div></div>
   const shown = items.filter(i => i.value > 0)
   const starts = shown.map((_, k) => shown.slice(0, k).reduce((n, x) => n + (x.value / total) * C, 0))
   return (
     <div className="bb-donut-layout">
-      <svg className="bb-donut-svg" viewBox="0 0 140 140" role="img" aria-label={`Vote share: ${items.map(i => `${i.label} ${i.value}`).join(', ')}`}>
+      <svg className="bb-donut-svg" viewBox="0 0 140 140" role="img" aria-label={`${ariaLabel}: ${items.map(i => `${i.label} ${i.value}`).join(', ')}`}>
         <circle cx="70" cy="70" r={R} fill="none" stroke="var(--surface2)" strokeWidth="18" />
         {shown.map((i, k) => (
           <circle key={i.key ?? i.label} cx="70" cy="70" r={R} fill="none" stroke={i.color ?? colorAt(items.indexOf(i))} strokeWidth="18"

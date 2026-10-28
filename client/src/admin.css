@@ -242,6 +242,48 @@
 .bb-hbar-fill { display: block; height: 100%; border-radius: 99px; min-width: 3px; }
 .bb-hbar-value { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 
+/* ---------- dashboard hierarchy ---------- */
+.bb-dashboard-shell { gap: 18px; }
+.bb-dashboard-shell .bb-dashboard-title { font-size: clamp(24px, 3vw, 30px); letter-spacing: -.035em; }
+.bb-dashboard-shell .bb-metrics-grid { gap: 10px; }
+.bb-dashboard-shell .bb-metric-card { position: relative; overflow: hidden; border-color: rgba(130, 151, 177, .18); background: linear-gradient(145deg, #151f2c, #101720 72%); }
+.bb-dashboard-shell .bb-metric-card:after { content: ""; position: absolute; inset: auto -25px -46px auto; width: 110px; height: 110px; border-radius: 50%; background: currentColor; opacity: .035; }
+.bb-dashboard-shell .bb-metric-icon.indigo { color: #aab8ff; background: rgba(107, 123, 214, .18); }
+.bb-dashboard-shell .bb-dashboard-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding: 14px 4px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.bb-dashboard-status > div { display: grid; gap: 4px; min-width: 0; }
+.bb-dashboard-status span { color: var(--muted); font-size: 10px; letter-spacing: .09em; text-transform: uppercase; }
+.bb-dashboard-status strong { overflow: hidden; color: var(--text); font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.bb-dashboard-status strong.ok { color: #82d6ad; }
+.bb-dashboard-status strong.bad { color: #ef9ca7; }
+.bb-dashboard-status strong.muted { color: #aeb9cc; }
+.bb-dashboard-status small { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.bb-dashboard-shell .bb-panel { border-color: rgba(130, 151, 177, .16); background: linear-gradient(150deg, #131c28, #101720); }
+.bb-dashboard-shell .bb-panel-header { font-size: 14px; }
+.bb-dashboard-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.bb-dashboard-chart-grid > .bb-panel { min-width: 0; }
+.bb-dashboard-state-chart, .bb-dashboard-votes-chart { max-height: 330px; overflow-y: auto; padding-right: 4px; }
+.bb-dashboard-state-chart .bb-hbar-row { grid-template-columns: minmax(90px, 190px) 1fr 40px; }
+.bb-dashboard-chart-grid .bb-donut-layout { align-items: center; }
+.bb-dashboard-status a { color: #aab8ff; }
+.bb-dashboard-status a:hover { text-decoration: underline; }
+.bb-candidates-page .bb-summary-grid { gap: 10px; }
+.bb-candidates-page .bb-summary-card { background: linear-gradient(145deg, #151f2c, #101720 72%); }
+.bb-candidates-page .bb-section-card { border-color: rgba(130, 151, 177, .18); }
+.bb-candidates-page .bb-filters { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.bb-candidates-page .bb-table tbody tr td:nth-child(2) { min-width: 190px; }
+.bb-progress-chart-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 14px; }
+.bb-progress-chart-grid .bb-panel { min-width: 0; }
+.bb-progress-overview { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.bb-progress-overview .bb-donut-svg { width: 130px; height: 130px; }
+.bb-progress-note { padding: 10px 12px; border-left: 2px solid var(--warn); background: rgba(216, 162, 79, .07); color: #d3c4a8; font-size: 12px; line-height: 1.55; }
+@media (max-width: 760px) {
+  .bb-dashboard-status { grid-template-columns: 1fr; gap: 12px; }
+  .bb-dashboard-chart-grid { grid-template-columns: 1fr; }
+  .bb-dashboard-state-chart, .bb-dashboard-votes-chart { max-height: 280px; }
+  .bb-progress-chart-grid { grid-template-columns: 1fr; }
+  .bb-progress-overview { justify-content: flex-start; }
+}
+
 /* ---------- forms, filters, dialogs, flash messages ---------- */
 .bb-admin-shell .bb-input { width: 100%; background: #0d131c; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: inherit; font-size: 13px; }
 .bb-admin-shell .bb-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }

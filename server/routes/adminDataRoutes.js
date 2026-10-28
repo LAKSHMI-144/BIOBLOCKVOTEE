@@ -16,6 +16,15 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
             COALESCE(SUM(has_voted),0) voted, COALESCE(SUM(is_eligible AND NOT has_voted),0) remaining, COALESCE(SUM(constituency_id IS NULL),0) no_constituency FROM voters`).then(([x]) => [x]);
         const t = await tally();
         const [[c]] = await db.query(`SELECT COUNT(*) total, COALESCE(SUM(is_active),0) active, COALESCE(SUM(party_id IS NULL OR constituency_id IS NULL),0) unassigned FROM candidates`).then(([x]) => [x]);
+        const [candidateCountsByParty] = await db.query(`SELECT COALESCE(p.party_id, 0) party_id, COALESCE(p.name, 'Unassigned') party_name, COUNT(*) candidates,
+                COALESCE(SUM(c.description LIKE 'DEMO DATA - Fictional%'), 0) demo_candidates
+            FROM candidates c LEFT JOIN parties p ON p.party_id = c.party_id
+            GROUP BY p.party_id, p.name ORDER BY candidates DESC, party_name`);
+        const [candidateCountsByState] = await db.query(`SELECT COALESCE(s.state_id, 0) state_id, COALESCE(s.name, 'Unassigned') state_name, COUNT(*) candidates,
+                COALESCE(SUM(c.description LIKE 'DEMO DATA - Fictional%'), 0) demo_candidates
+            FROM candidates c LEFT JOIN constituencies k ON k.constituency_id = c.constituency_id
+            LEFT JOIN states s ON s.state_id = k.state_id
+            GROUP BY s.state_id, s.name ORDER BY candidates DESC, state_name`);
         const [[a]] = await db.query(`SELECT COUNT(*) total, COALESCE(SUM(DATE(timestamp) = CURDATE()),0) today, COALESCE(SUM(status='FAILED'),0) failed, COALESCE(SUM(status='DENIED'),0) denied FROM audit_log`).then(([x]) => [x]);
         const [recent] = await db.query("SELECT id, voter_id, actor, action, event_type, status, details, timestamp FROM audit_log ORDER BY id DESC LIMIT 8");
         const e = await election.current();
@@ -35,6 +44,8 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
             votes: { total: t.total_votes, voters_marked_voted: voted, consistent: t.total_votes === voted },
             by_candidate: t.candidates.filter(x => x.is_active || x.votes > 0),
             by_party: t.by_party,
+            candidate_counts_by_party: candidateCountsByParty.map(x => ({ ...x, candidates: Number(x.candidates), demo_candidates: Number(x.demo_candidates) })),
+            candidate_counts_by_state: candidateCountsByState.map(x => ({ ...x, candidates: Number(x.candidates), demo_candidates: Number(x.demo_candidates) })),
             audit: { total: Number(a.total), today: Number(a.today), failed: Number(a.failed), denied: Number(a.denied) },
             recent_activity: recent.map(shapeAudit),
             blockchain
