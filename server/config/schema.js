@@ -51,7 +51,14 @@ const TABLES = {
         contact_hash CHAR(64) NULL, contact_masked VARCHAR(20) NULL,
         otp_expires_at DATETIME NULL, attempts INT NOT NULL DEFAULT 0,
         sends INT NOT NULL DEFAULT 0, last_sent_at DATETIME NULL, verified_at DATETIME NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_idv_voter (voter_id))`
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_idv_voter (voter_id))`,
+    liveness_challenges: `CREATE TABLE IF NOT EXISTS liveness_challenges (
+        token_hash CHAR(64) PRIMARY KEY, voter_id VARCHAR(20) NOT NULL,
+        actions JSON NOT NULL, expires_at DATETIME NOT NULL, consumed_at DATETIME NULL,
+        verification_token_hash CHAR(64) NULL, identity_frame_hash CHAR(64) NULL,
+        liveness_passed_at DATETIME NULL, identity_consumed_at DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, KEY idx_liveness_expiry (expires_at),
+        CONSTRAINT fk_liveness_voter FOREIGN KEY (voter_id) REFERENCES voters(voter_id) ON DELETE CASCADE)`
 };
 
 async function ensureSchema() {
@@ -74,7 +81,11 @@ async function ensureSchema() {
         ['candidates', 'position', 'VARCHAR(100) NULL'],
         ['candidates', 'status', "VARCHAR(20) NOT NULL DEFAULT 'Active'"],
         ['candidates', 'party_id', 'INT NULL'],
-        ['candidates', 'constituency_id', 'INT NULL']
+        ['candidates', 'constituency_id', 'INT NULL'],
+        ['liveness_challenges', 'verification_token_hash', 'CHAR(64) NULL'],
+        ['liveness_challenges', 'identity_frame_hash', 'CHAR(64) NULL'],
+        ['liveness_challenges', 'liveness_passed_at', 'DATETIME NULL'],
+        ['liveness_challenges', 'identity_consumed_at', 'DATETIME NULL']
     ];
     for (const [t, c, def] of cols) if (!(await hasColumn(t, c))) { await db.query(`ALTER TABLE \`${t}\` ADD COLUMN \`${c}\` ${def}`); done.push(`+ ${t}.${c}`); }
 

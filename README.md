@@ -39,6 +39,7 @@ After initializing the database, run `cd server && npm run seed-demo` to insert 
 cd python_ai
 python -m venv venv && venv\Scripts\activate      # Windows   (macOS/Linux: source venv/bin/activate)
 pip install -r requirements.txt
+python download_liveness_model.py
 copy .env.example .env                             # (macOS/Linux: cp)
 ```
 Edit `python_ai/.env`:
@@ -52,6 +53,9 @@ Edit `python_ai/.env`:
 python app.py
 ```
 First start downloads the InsightFace models (~300 MB, one time) – wait for "Running on http://127.0.0.1:5001".
+The liveness add-on is downloaded separately (about 1.5 MB) by the command above to
+`%USERPROFILE%\.insightface\addons\liveness.onnx`. The downloader verifies the pinned SHA-256
+before installing it. No additional Python package is required beyond `requirements.txt`.
 
 ### 3. Node server (port 5000)
 ```
@@ -91,7 +95,7 @@ Admin login → dashboard. Admins can: schedule the election (name, start, end; 
 The voter-facing UI is available in English, ಕನ್ನಡ and हिन्दी (switcher in the header). Strings live in `client/src/i18n/{en,kn,hi}.js`; `npm run check:i18n` in `client` verifies all three have the same keys. Admin pages are English only.
 
 ## Known limitations
-* **Liveness detection is NOT implemented** – a printed photo can pass face matching.
+* **Liveness uses one randomized blink or head-turn challenge and a presentation-attack detection model**, but cannot guarantee protection from video replay, deepfakes, or other sophisticated presentation attacks. Physical spoof testing is still required.
 * **The blockchain is in memory only.** It lives in the Python AI service and **resets when that service restarts**, while the database keeps `has_voted` and `vote_count`. Persistence is NOT implemented. The voter hash in each block is an unsalted SHA-256 of the Voter ID.
 * The voter session is held in browser memory: refreshing the page requires logging in again. Registration/voter tokens are signed with `SESSION_SECRET`; if it is empty they are lost whenever the server restarts.
 * Admin login is one env-configured account (2-hour token); the brute-force limit and the other rate limits are in memory.
@@ -118,6 +122,16 @@ The pages that need no backend (Home) load with only #4; Register/Vote/Results/B
 | `/voter/login` → `/voter/authenticate` → `/voter/dashboard` → `/voter/vote` | Voter flow (also `/voter/register`) |
 | `/admin/login` → `/admin` (dashboard, `election`, `candidates`, `voters`, `voting`, `audit`, `blockchain`, `results`) | Admin / auditor portal |
 
+Voter login uses a server-issued, single-use 90-second challenge that randomly selects one action:
+blink, turn left, or turn right. The Python service checks consecutive eye/head-landmark measurements
+and the separately downloaded presentation-attack detection model. After liveness succeeds, Node
+issues a short-lived, single-use proof bound to the initial frontal challenge frame; the existing ArcFace
+recognition must match that frame and the entered voter ID before Node issues a voter session.
+Frames are processed in memory and are not written to disk or logged. Challenge-response and a PAD
+model reduce simple still-photo replay but cannot
+guarantee protection from video replay, deepfakes, or other sophisticated presentation attacks.
+Physical spoof testing is still required.
+
 ## Admin login setup
 Credentials live only in `server/.env` (never in Git or React):
 ```
@@ -141,12 +155,20 @@ Easier: `cd server && npm run setup-admin -- "a-strong-password"` writes the thr
 Real `.env` files are git-ignored. Only the `.env.example` files are committed - never paste real values into them.
 
 ## Tests
+Run the liveness unit tests without database services:
+```
+cd python_ai
+python -m unittest discover -s tests -v
+cd ..\server
+node --test tests\liveness.test.js
+```
+
 With MySQL, the AI service and Node running, on a scratch database:
 ```
 cd tests/phase3
 python make_test_images.py
-python test_registration_api.py                      # registration + OTP + face (empty voters table)
-ADMIN_PW="<admin password>" python test_flow_api.py   # admin auth, election rules, candidates, voting, results, chain
+python test_registration_api.py                      # registration + OTP + legacy-login rejection
+ADMIN_PW="<admin password>" python test_election_flow.py  # stops before live-camera voting tests
 ```
 
 ## Troubleshooting

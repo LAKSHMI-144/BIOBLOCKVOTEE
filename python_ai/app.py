@@ -13,6 +13,7 @@ load_dotenv()
 from blockchain import voting_blockchain  # noqa: E402
 from face_module import (FaceError, analyze_image, authenticate_face,  # noqa: E402
                          build_template, find_duplicate, get_engine)
+from liveness import LivenessError, verify_liveness  # noqa: E402
 from security import check_config, encrypt_embedding  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
@@ -137,6 +138,29 @@ def authenticate():
     finally:
         if db is not None:
             db.close()
+
+
+@app.route("/liveness-check", methods=["POST"])
+@internal_only
+def liveness_check():
+    """Validate a server-issued challenge against transient camera frames."""
+    data = request.get_json(silent=True) or {}
+    try:
+        result = verify_liveness(data.get("frames"), data.get("actions"))
+        return jsonify(result)
+    except LivenessError as error:
+        return jsonify({
+            "success": False,
+            "code": error.code,
+            "message": error.message,
+        }), 400
+    except Exception:
+        log.exception("liveness-check failed")
+        return jsonify({
+            "success": False,
+            "code": "LIVENESS_SERVICE_ERROR",
+            "message": "Liveness verification is temporarily unavailable.",
+        }), 503
 
 
 @app.route("/add-to-blockchain", methods=["POST"])

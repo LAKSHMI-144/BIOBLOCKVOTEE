@@ -7,12 +7,15 @@ import { useT } from '../i18n/i18nContext'
 import { API, apiError, bearer } from '../api'
 import { displayCandidateName, displayConstituencyName } from '../lib/adminFormat'
 
+const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
+
 // mode 'auth': face verification only, then on to the voter dashboard.
 // mode 'vote': candidate selection + confirmation (requires a verified voter).
 export default function Vote({ mode = 'auth' }) {
   const { t } = useT()
   const nav = useNavigate()
   const webcamRef = useRef(null)
+  const streamRef = useRef(null)
   const busy = useRef(false)
   const { voter, setVoter, token, setToken, pendingId, setReceipt: saveReceipt, logout } = useVoter()
   const [step, setStep] = useState(mode === 'vote' ? 'vote' : 'auth')
@@ -24,6 +27,16 @@ export default function Vote({ mode = 'auth' }) {
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(false)
   const [receipt, setReceipt] = useState(null)
+  const [cameraReady, setCameraReady] = useState(false)
+  const [livenessState, setLivenessState] = useState('camera_waiting')
+  const [cameraKey, setCameraKey] = useState(0)
+  const [activeChallenge, setActiveChallenge] = useState('')
+
+  useEffect(() => () => {
+    const stream = streamRef.current
+    stream?.getTracks().forEach(track => track.stop())
+    streamRef.current = null
+  }, [])
 
   useEffect(() => {
     if (mode !== 'vote') return
@@ -39,22 +52,143 @@ export default function Vote({ mode = 'auth' }) {
 
   const fail = (text) => setMsg({ type: 'error', text })
 
+  const stopCamera = () => {
+    const stream = streamRef.current || webcamRef.current?.video?.srcObject
+    stream?.getTracks().forEach(track => track.stop())
+    streamRef.current = null
+  }
+
+  const resetVerification = () => {
+    busy.current = false
+    setLoading(false)
+    setMsg(null)
+    setActiveChallenge('')
+    if (!cameraReady) {
+      stopCamera()
+      streamRef.current = null
+      setLivenessState('camera_waiting')
+      setCameraKey(key => key + 1)
+      return
+    }
+    setLivenessState('camera_ready')
+  }
+
   const authenticate = async () => {
     if (busy.current) return
-    const img = webcamRef.current?.getScreenshot()
-    if (!img) return fail(t('auth.cameraError'))
-    busy.current = true; setLoading(true); setMsg({ type: 'info', text: t('auth.verifying') })
+    if (!cameraReady) {
+      setLivenessState('service_error')
+      return fail(t('auth.cameraError'))
+    }
+    busy.current = true
+    setLoading(true)
+    setMsg(null)
+    setActiveChallenge('')
+    setLivenessState('checking_liveness')
+    let verificationStage = 'liveness'
     try {
-      // The server checks that the face belongs to the Voter ID typed on the login page.
-      const res = await axios.post(`${API}/voters/authenticate`, { face_image: img.split(',')[1], voter_id: pendingId })
-      if (res.data.success) {
-        setVoter({ id: res.data.voter_id, name: res.data.voter_name }); setToken(res.data.session_token)
-        setMsg(null); nav('/voter/dashboard')
-      } else {
-        const k = `err.${res.data.code}`; const tr = res.data.code && t(k) !== k ? t(k) : null
-        fail(tr || res.data.message || t('err.http.403'))
+      const challengeRes = await axios.post(`${API}/voters/liveness-challenge`, { voter_id: pendingId })
+      const { challenge_token: challengeToken, actions, frame_count: frameCount } = challengeRes.data
+      const challengeAction = actions?.[0]
+      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['blink', 'turn_left', 'turn_right'].includes(challengeAction) || ![16, 24].includes(frameCount)) {
+        const error = new Error(t('auth.challengeInvalid'))
+        error.code = 'CHALLENGE_INVALID'
+        throw error
       }
-    } catch (e) { fail(apiError(e, t).message) }
+
+      const frames = []
+      const capture = () => {
+        const screenshot = webcamRef.current?.getScreenshot()
+        if (!screenshot) {
+          const error = new Error(t('auth.cameraError'))
+          error.code = 'CAMERA_CAPTURE_ERROR'
+          throw error
+        }
+        frames.push(screenshot.split(',')[1])
+      }
+      capture()
+      await delay(100)
+      capture()
+      setActiveChallenge(challengeAction)
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      for (let frame = 0; frame < frameCount - 4; frame += 1) {
+        await delay(240)
+        capture()
+      }
+      await delay(200)
+      capture()
+      await delay(100)
+      capture()
+
+      if (frames.length !== frameCount) {
+        const error = new Error(t('auth.challengeInvalid'))
+        error.code = 'CHALLENGE_INVALID'
+        throw error
+      }
+      const liveRes = await axios.post(`${API}/voters/check-liveness`, {
+        challenge_token: challengeToken,
+        frames,
+        voter_id: pendingId
+      })
+      const identityFrameIndex = liveRes.data?.identity_frame_index
+      if (
+        !liveRes.data?.success
+        || liveRes.data.liveness_passed !== true
+        || !liveRes.data.liveness_token
+        || !Number.isInteger(identityFrameIndex)
+        || identityFrameIndex < 0
+        || identityFrameIndex >= frames.length
+      ) {
+        const error = new Error(liveRes.data?.message || t('auth.blinkNotDetected'))
+        error.response = { status: 403, data: liveRes.data }
+        throw error
+      }
+      setActiveChallenge('')
+      setLivenessState('liveness_passed')
+      await delay(120)
+      verificationStage = 'identity'
+      setLivenessState('recognizing_face')
+      const res = await axios.post(`${API}/voters/authenticate`, {
+        liveness_token: liveRes.data.liveness_token,
+        image: frames[identityFrameIndex],
+        voter_id: pendingId
+      })
+      if (!res.data?.success || res.data.liveness_passed !== true || !res.data.session_token || !res.data.voter_id) {
+        const error = new Error(res.data?.message || t('auth.faceNotRecognized'))
+        error.response = { status: 403, data: { ...res.data, code: res.data?.code || 'IDENTITY_FAILED' } }
+        throw error
+      }
+      setLivenessState('face_recognized')
+      setMsg({ type: 'success', text: t('auth.success') })
+      setVoter({ id: res.data.voter_id, name: res.data.voter_name })
+      setToken(res.data.session_token)
+      stopCamera()
+      await delay(250)
+      nav('/voter/dashboard')
+    } catch (e) {
+      setActiveChallenge('')
+      const data = e.response?.data
+      const code = data?.code
+      if (e.code === 'CAMERA_CAPTURE_ERROR' || !e.response || e.response.status >= 500 || code?.includes('SERVICE') || code === 'AI_ERROR') {
+        setLivenessState('service_error')
+      } else if (code === 'ALREADY_VOTED') {
+        setLivenessState('already_voted')
+      } else if (code === 'NOT_ELIGIBLE') {
+        setLivenessState('not_eligible')
+      } else if (code === 'VOTER_NOT_FOUND') {
+        setLivenessState('voter_not_found')
+      } else if (verificationStage === 'identity' || data?.liveness_passed === true) {
+        setLivenessState('identity_verification_failed')
+      } else if (e.code === 'CHALLENGE_INVALID') {
+        setLivenessState('liveness_failed')
+      } else {
+        setLivenessState('liveness_failed')
+      }
+      const knownError = code && t(`err.${code}`) !== `err.${code}` ? t(`err.${code}`) : null
+      const errorMessage = e.code === 'CHALLENGE_INVALID' || e.code === 'CAMERA_CAPTURE_ERROR'
+        ? e.message
+        : apiError(e, t).message
+      fail(knownError || data?.message || errorMessage)
+    }
     busy.current = false; setLoading(false)
   }
 
@@ -80,14 +214,44 @@ export default function Vote({ mode = 'auth' }) {
   if ((mode === 'vote' && (!voter || !token)) || (mode === 'auth' && !pendingId)) return <Navigate to="/voter/login" replace />
 
   const closed = election && election.open === false
+  const authStatusText = msg?.text || [
+    t(`auth.status.${livenessState}`),
+    activeChallenge && t(`auth.challenge.${activeChallenge}`)
+  ].filter(Boolean).join(' · ')
   return (
     <div className="page">
       <h2 className="title">{step === 'auth' ? `🔐 ${t('auth.title')}` : step === 'vote' ? `🗳️ ${t('vote.title')}` : `✅ ${t('vote.doneTitle')}`}</h2>
       {step === 'auth' && (
         <div className="card center">
           <p className="hint">{t('auth.hint')}</p>
-          <Webcam ref={webcamRef} screenshotFormat="image/jpeg" width={300} className="webcam" onUserMediaError={() => fail(t('face.permission'))} />
-          <button className="btn primary" style={{ width: '100%', padding: 14, fontSize: 16 }} onClick={authenticate} disabled={loading}>{loading ? t('auth.verifying') : `🔐 ${t('auth.verify')}`}</button>
+          <Webcam
+            key={cameraKey}
+            ref={webcamRef}
+            screenshotFormat="image/jpeg"
+            screenshotQuality={0.65}
+            width={300}
+            videoConstraints={{ facingMode: 'user' }}
+            className="webcam"
+            onUserMedia={stream => {
+              streamRef.current = stream
+              setCameraReady(true)
+              setLivenessState('camera_ready')
+            }}
+            onUserMediaError={error => {
+              const errorName = error?.name
+              setCameraReady(false)
+              setLivenessState('service_error')
+              fail(errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError'
+                ? t('auth.cameraDenied')
+                : errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError'
+                  ? t('auth.cameraUnavailable')
+                  : t('auth.cameraError'))
+            }}
+          />
+          <p className={`msg auth-status ${msg?.type || (['liveness_failed', 'identity_verification_failed', 'service_error', 'already_voted', 'not_eligible', 'voter_not_found'].includes(livenessState) ? 'error' : livenessState === 'liveness_passed' || livenessState === 'face_recognized' ? 'success' : 'info')}`} role={msg?.type === 'error' ? 'alert' : 'status'}>
+            {authStatusText}
+          </p>
+          <button className="btn primary" style={{ width: '100%', padding: 14, fontSize: 16 }} onClick={msg ? (cameraReady ? authenticate : resetVerification) : authenticate} disabled={loading || (!cameraReady && !msg)}>{loading ? t('auth.verifying') : msg ? t('auth.retry') : `🔐 ${t('auth.verify')}`}</button>
           <button className="btn secondary" onClick={() => nav('/voter/login')} disabled={loading}>{t('common.back')}</button>
         </div>
       )}
@@ -126,7 +290,7 @@ export default function Vote({ mode = 'auth' }) {
           <button className="btn primary" onClick={() => nav('/voter/dashboard')}>{t('vote.toDashboard')}</button>
         </div>
       )}
-      {msg && <p className={`msg ${msg.type}`} role={msg.type === 'error' ? 'alert' : 'status'}>{msg.text}</p>}
+      {msg && mode !== 'auth' && <p className={`msg ${msg.type}`} role={msg.type === 'error' ? 'alert' : 'status'}>{msg.text}</p>}
     </div>
   )
 }
