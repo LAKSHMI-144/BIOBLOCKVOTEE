@@ -227,7 +227,7 @@ export default function Register() {
               {errors.state_id && <p className="field-err" role="alert">{errors.state_id}</p>}
             </div>
             <div>
-              <label htmlFor="constituency_id">{t('reg.constituency')} *</label>
+              <label htmlFor="constituency_id">Lok Sabha constituency *</label>
               <select id="constituency_id" className={`input${errors.constituency_id ? ' invalid' : ''}`} value={form.constituency_id} disabled={!!loading || !form.state_id} onChange={e => { setForm({ ...form, constituency_id: e.target.value }); clearErr('constituency_id') }}>
                 <option value="">{t('reg.constSelect')}</option>
                 {consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{displayConstituencyName(c.name)}</option>)}
@@ -235,7 +235,7 @@ export default function Register() {
               {errors.constituency_id && <p className="field-err" role="alert">{errors.constituency_id}</p>}
               {geoErr && <p className="field-err" role="alert">{t('reg.geoError')}</p>}
             </div>
-            <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 4 }}>{t('reg.constHint')}</p>
+            <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 4 }}>Select your parliamentary Lok Sabha constituency. Your ballot will show only the candidate options assigned to this constituency. This is a college simulation; candidate names are fictional demo data.</p>
             <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 14 }}>{t('reg.hint18')}</p>
             <div className="btn-row">
               <button type="submit" className="btn primary" disabled={!!loading}>{loading || t('common.next')}</button>
