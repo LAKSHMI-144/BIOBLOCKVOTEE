@@ -149,7 +149,7 @@ module.exports = {
     "Jaunpur", "Machhlishahr (SC)", "Ghazipur", "Chandauli", "Varanasi",
     "Bhadohi", "Mirzapur", "Robertsganj (SC)"
   ],
-  UK: ["Tehri Garhwal", "Garhwal", "Almora (SC)", "Nainital-Udham Singh Nagar", "Hardwar"],
+  UK: ["Tehri Garhwal", "Garhwal", "Almora (SC)", "Nainital-Udhamsingh Nagar", "Hardwar"],
   WB: [
     "Coochbehar (SC)", "Alipurduars (ST)", "Jalpaiguri (SC)", "Darjeeling",
     "Raiganj", "Balurghat", "Maldaha Uttar", "Maldaha Dakshin", "Jangipur",
