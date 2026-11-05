@@ -93,6 +93,11 @@ async function seed() {
     for (const [code, names] of Object.entries(LOK_SABHA_CONSTITUENCIES)) {
         const stateId = byCode[code];
         if (!stateId) throw new Error('Missing state / UT master row for code ' + code);
+        // Deactivate stale/old parliamentary labels within this jurisdiction.
+        await db.query(
+            "UPDATE constituencies SET is_active = FALSE WHERE state_id = ? AND kind = 'PARLIAMENTARY' AND name NOT IN (?)",
+            [stateId, names]
+        );
         for (const name of names) {
             const [r] = await db.query(
                 "INSERT IGNORE INTO constituencies (state_id, name, kind, is_active) VALUES (?, ?, 'PARLIAMENTARY', TRUE)",
@@ -100,8 +105,12 @@ async function seed() {
             );
             constituencyCount += r.affectedRows;
         }
+        // Re-enable only the exact current ECI roster names for this jurisdiction.
+        await db.query(
+            "UPDATE constituencies SET is_active = TRUE WHERE state_id = ? AND kind = 'PARLIAMENTARY' AND name IN (?)",
+            [stateId, names]
+        );
     }
-    await db.query("UPDATE constituencies SET is_active = TRUE WHERE kind = 'PARLIAMENTARY'");
     if (constituencyCount) done.push('+' + constituencyCount + ' Lok Sabha parliamentary constituencies');
     return done;
 }
