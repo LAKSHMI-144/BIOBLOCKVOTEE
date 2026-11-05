@@ -27,7 +27,7 @@ export default function AdminElection() {
         <div>
           <div className="bb-page-kicker">Election configuration</div>
           <h1>Election details</h1>
-          <p className="bb-page-subtitle">Voting is possible only while the election is ACTIVE: scheduled, and the current time is inside its window.</p>
+          <p className="bb-page-subtitle">India-wide Lok Sabha simulation: voters choose an MP candidate in their own constituency. The Prime Minister is determined through parliamentary majority and government formation. Voting is possible only during the configured active election window.</p>
         </div>
         {e && <button type="button" className="bb-button primary" onClick={() => setEdit(true)}>Edit election</button>}
       </header>

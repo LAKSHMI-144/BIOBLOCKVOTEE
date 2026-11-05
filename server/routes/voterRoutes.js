@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const db = require('../config/db');
 const ai = require('../config/ai');
@@ -27,15 +28,16 @@ const validImage = s => typeof s === 'string' && s.length > 100 && s.length <= M
 
 // Same rules the browser applies – the server never trusts the browser's validation.
 function validateDetails(body) {
-    const voter_id = String(body.voter_id ?? '').trim().toUpperCase();
+    const demo_identity_number = String(body.demo_identity_number ?? '').trim();
+    const district = String(body.district ?? '').trim();
     const name = String(body.name ?? '').trim().replace(/\s+/g, ' ');
     const address = String(body.address ?? '').trim();
     const gender = String(body.gender ?? '').trim();
     const ageRaw = typeof body.age === 'string' ? body.age.trim() : body.age;
     const age = ageRaw === '' || ageRaw === null || ageRaw === undefined ? NaN : Number(ageRaw);
     const e = {};
-    if (!voter_id) e.voter_id = { code: 'ID_REQUIRED', message: 'Please enter your Voter ID.' };
-    else if (!VOTER_ID_RE.test(voter_id)) e.voter_id = { code: 'ID_FORMAT', message: 'Voter ID must be 4-20 letters, digits or hyphens.' };
+    if (!/^\d{12}$/.test(demo_identity_number)) e.demo_identity_number = { code: 'DEMO_ID_INVALID', message: 'Enter a valid 12-digit synthetic demo identity number.' };
+    if (!district || district.length > 100) e.district = { code: 'DISTRICT_REQUIRED', message: 'Enter your district.' };
     if (!name) e.name = { code: 'NAME_REQUIRED', message: 'Please enter your full name.' };
     else if (name.length < 2 || name.length > 100 || !NAME_RE.test(name) || (name.match(/\p{L}/gu) || []).length < 2)
         e.name = { code: 'NAME_INVALID', message: 'Enter a valid full name (letters, spaces, . - \' only).' };
@@ -46,7 +48,7 @@ function validateDetails(body) {
     else if (address.length < 5) e.address = { code: 'ADDRESS_SHORT', message: 'Please enter your full address.' };
     else if (address.length > 500) e.address = { code: 'ADDRESS_LONG', message: 'Address is too long.' };
     if (!GENDERS.includes(gender)) e.gender = { code: 'GENDER_INVALID', message: 'Please select a gender.' };
-    return { voter_id, name, age, gender, address, errors: e };
+    return { demo_identity_number, district, name, age, gender, address, errors: e };
 }
 
 // Optional constituency the voter declares. It is never inferred; if given it must exist, be active and sit in the stated state.
@@ -75,47 +77,89 @@ const requireReg = (req, res, next) => {
     req.regVoter = id; next();
 };
 
-// Step 1 – voter details. Creates (or resumes) a PENDING registration and returns a ticket.
+// Step 1 – details. Reserve a sequential ID; show it only after face registration succeeds.
 router.post('/register', rateLimit('register', 30, 15 * 60 * 1000), async (req, res) => {
+    const v = validateDetails(req.body || {});
+    if (Object.keys(v.errors).length) return fieldFail(res, 400, v.errors);
+    const loc = await resolveLocation(req.body || {});
+    if (loc.error) return fieldFail(res, 400, loc.error);
+    const demoIdentityHash = crypto.createHash('sha256').update(`BIOBLOCKVOTE-DEMO-ID:${v.demo_identity_number}`).digest('hex');
+    const demoIdentityMasked = `********${v.demo_identity_number.slice(-4)}`;
+    const connection = await db.getConnection();
+    let voter_id;
     try {
-        const v = validateDetails(req.body || {});
-        if (Object.keys(v.errors).length) {
-            if (v.errors.age?.code === 'AGE_MIN' && VOTER_ID_RE.test(v.voter_id)) await audit(v.voter_id, 'REGISTRATION_REJECTED:UNDERAGE');
-            return fieldFail(res, 400, v.errors);
+        await connection.beginTransaction();
+        const [duplicate] = await connection.query('SELECT voter_id FROM voters WHERE demo_identity_hash = ? LIMIT 1 FOR UPDATE', [demoIdentityHash]);
+        if (duplicate.length) {
+            await connection.rollback();
+            return fieldFail(res, 409, { demo_identity_number: { code: 'DEMO_ID_EXISTS', message: 'This demo identity number is already registered.' } });
         }
-        const { voter_id, name, age, gender, address } = v;
-        const loc = await resolveLocation(req.body || {});
-        if (loc.error) return fieldFail(res, 400, loc.error);
-        const dup = { voter_id: { code: 'ID_EXISTS', message: 'Voter ID already exists.' } };
-
-        const [exist] = await db.query("SELECT face_encoding IS NOT NULL AS has_face, registered_at FROM voters WHERE voter_id = ?", [voter_id]);
-        if (exist.length > 0) {
-            if (exist[0].has_face) { await audit(voter_id, 'REGISTRATION_REJECTED:ID_EXISTS'); return fieldFail(res, 409, dup); }
-            const mine = regVoter(req) === voter_id;
-            // registered_at is written from this server's clock (see INSERT), so comparing with Date.now() is consistent
-            const stale = Date.now() - new Date(exist[0].registered_at).getTime() > PENDING_RECLAIM_MS;
-            if (!mine && !stale)
-                return fieldFail(res, 409, { voter_id: { code: 'ID_PENDING', message: 'Voter ID already exists (registration in progress). Try again later or contact an administrator.' } });
-            await db.query("UPDATE voters SET name=?, age=?, gender=?, address=?, state_id=?, constituency_id=?, is_eligible=TRUE, registered_at=? WHERE voter_id=?", [name, age, gender, address, loc.state_id, loc.constituency_id, new Date(), voter_id]);
-            if (!mine) await db.query("DELETE FROM identity_verifications WHERE voter_id = ?", [voter_id]);   // reclaimed ID: old identity proof is not inherited
-            return res.json({ success: true, resumed: true, voter_id, registration_token: tokens.signReg(voter_id),
-                message: 'Details saved. Continue with the next step.' });
-        }
-
-        try {
-            await db.query("INSERT INTO voters (voter_id, name, age, gender, address, state_id, constituency_id, is_eligible, registered_at) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?)", [voter_id, name, age, gender, address, loc.state_id, loc.constituency_id, new Date()]);
-        } catch (e) {
-            if (e.code === 'ER_DUP_ENTRY') { await audit(voter_id, 'REGISTRATION_REJECTED:ID_EXISTS'); return fieldFail(res, 409, dup); }   // double-click / parallel request
-            throw e;
-        }
-        await audit(voter_id, 'REGISTERED');
-        res.json({ success: true, voter_id, registration_token: tokens.signReg(voter_id), message: `Details saved for ${name}. Continue with the next step.` });
+        const [counters] = await connection.query("SELECT next_value FROM voter_id_counters WHERE sequence_name = 'voter' FOR UPDATE");
+        if (!counters.length) throw Object.assign(new Error('Voter ID counter missing. Run npm run migrate.'), { code: 'DB_SCHEMA' });
+        voter_id = `V${String(counters[0].next_value).padStart(3, '0')}`;
+        await connection.query("UPDATE voter_id_counters SET next_value = next_value + 1 WHERE sequence_name = 'voter'");
+        await connection.query(
+            "INSERT INTO voters (voter_id, name, age, gender, address, district, demo_identity_hash, demo_identity_masked, state_id, constituency_id, is_eligible, registered_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)",
+            [voter_id, v.name, v.age, v.gender, v.address, v.district, demoIdentityHash, demoIdentityMasked, loc.state_id, loc.constituency_id, new Date()]
+        );
+        await connection.commit();
     } catch (e) {
-        console.error('register error:', e);   // full cause goes to the server terminal only
-        await audit(null, 'REGISTRATION_FAILED:SERVER_ERROR');
-        const schema = ['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE'].includes(e.code);
-        fail(res, 500, schema ? 'Server database is out of date. Ask the administrator to run "npm run migrate" in the server folder.' : 'Registration failed. Please try again.',
+        await connection.rollback();
+        if (e.code === 'ER_DUP_ENTRY') return fieldFail(res, 409, { demo_identity_number: { code: 'DEMO_ID_EXISTS', message: 'This demo identity number is already registered.' } });
+        console.error('register error:', e.message);
+        const schema = ['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE', 'DB_SCHEMA'].includes(e.code);
+        return fail(res, 500, schema ? 'Database schema is out of date. Run npm run migrate in the server folder.' : 'Registration failed. Please try again.',
             { code: schema ? 'DB_SCHEMA' : 'SERVER_ERROR' });
+    } finally {
+        connection.release();
+    }
+    await audit(voter_id, 'REGISTERED');
+    return res.json({ success: true, voter_id, registration_token: tokens.signReg(voter_id), message: 'Details saved. Continue with demo OTP verification.' });
+});
+
+// Registration-only liveness challenge using the same PAD and facial-action model as login.
+router.post('/register-liveness-challenge', rateLimit('register-liveness-challenge', 20, 10 * 60 * 1000), requireReg, async (req, res) => {
+    try {
+        if (identity.mode() === 'required' && !(await identity.isVerified(req.regVoter)))
+            return fail(res, 403, 'Verify the demo OTP before face registration.', { code: 'IDENTITY_REQUIRED' });
+        const challenge = liveness.createChallenge();
+        await db.query(
+            'INSERT INTO liveness_challenges (token_hash, voter_id, actions, expires_at) VALUES (?, ?, ?, ?)',
+            [liveness.hashChallengeToken(challenge.token), req.regVoter, JSON.stringify(challenge.actions), new Date(Date.now() + 90 * 1000)]
+        );
+        res.set('Cache-Control', 'no-store');
+        return res.json({ success: true, challenge_token: challenge.token, actions: challenge.actions, frame_count: challenge.frame_count, expires_in: 90 });
+    } catch (e) {
+        console.error('registration liveness challenge error:', e.message);
+        return fail(res, 503, 'Could not start the registration camera challenge. Please try again.', { code: 'LIVENESS_SERVICE_ERROR' });
+    }
+});
+
+// Verify randomized camera frames and save a one-use proof tied to the exact identity frame.
+router.post('/check-registration-liveness', rateLimit('check-registration-liveness', 20, 10 * 60 * 1000), requireReg, async (req, res) => {
+    const { challenge_token: challengeToken, frames } = req.body || {};
+    const tokenHash = liveness.hashChallengeToken(challengeToken);
+    if (!tokenHash || !liveness.validateFrames(frames))
+        return fail(res, 400, 'The camera challenge data is invalid. Start again.', { code: 'INVALID_LIVENESS_DATA' });
+    try {
+        const actions = await liveness.consumeChallenge(db, tokenHash, req.regVoter);
+        if (!actions) return fail(res, 401, 'The camera challenge expired or was already used. Start again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
+        const liveRes = await ai.post('/liveness-check', { frames, actions }, { timeout: 90000 });
+        const identityFrameIndex = liveRes.data?.identity_frame_index;
+        if (!liveRes.data?.success || !liveness.isIdentityFrameIndex(identityFrameIndex, frames.length))
+            return res.status(403).json({ success: false, code: liveRes.data?.code || 'LIVENESS_FAILED', message: liveRes.data?.message || 'The camera challenge was not passed.' });
+        const verificationToken = liveness.createVerificationToken();
+        const saved = await liveness.storeLivenessPass(
+            db, tokenHash, req.regVoter,
+            liveness.hashChallengeToken(verificationToken),
+            liveness.hashFrame(frames[identityFrameIndex])
+        );
+        if (!saved) return fail(res, 401, 'The camera challenge expired. Start again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
+        res.set('Cache-Control', 'no-store');
+        return res.json({ success: true, liveness_passed: true, liveness_token: verificationToken, identity_frame_index: identityFrameIndex });
+    } catch (e) {
+        console.error('registration liveness check error:', e.message);
+        return fail(res, 503, 'Liveness verification is unavailable. Check the camera service and try again.', { code: 'LIVENESS_SERVICE_ERROR' });
     }
 });
 
@@ -139,14 +183,17 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
         const voter_id = req.regVoter;
         if (body.voter_id && String(body.voter_id).trim().toUpperCase() !== voter_id) return fail(res, 403, 'This registration session belongs to a different Voter ID.', { code: 'ID_MISMATCH' });
         const images = body.images;
+        const livenessTokenHash = liveness.hashChallengeToken(body.liveness_token);
+        if (!livenessTokenHash || !validImage(body.liveness_frame)) return fail(res, 400, 'Complete the live-face challenge before registering your face.', { code: 'INVALID_LIVENESS_DATA' });
         if (!Array.isArray(images) || images.length < MIN_IMAGES || images.length > MAX_IMAGES || !images.every(validImage))
             return fail(res, 400, `Send ${MIN_IMAGES}-${MAX_IMAGES} valid face images`, { code: 'INVALID_IMAGE' });
 
         const [voter] = await db.query("SELECT voter_id FROM voters WHERE voter_id = ?", [voter_id]);
         if (voter.length === 0) return fail(res, 404, "Register voter details first");
         if (identity.mode() === 'required' && !(await identity.isVerified(voter_id)))
-            return fail(res, 403, 'Verify your identity (OTP) before registering your face.', { code: 'IDENTITY_REQUIRED' });
-
+            return fail(res, 403, 'Verify the demo OTP before registering your face.', { code: 'IDENTITY_REQUIRED' });
+        const live = await liveness.consumeLivenessPass(db, livenessTokenHash, voter_id, body.liveness_frame);
+        if (!live) return fail(res, 403, 'Your live-face check expired or did not match. Start the challenge again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
         const r = await ai.post('/register-face', { voter_id, images });
         if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); await audit(voter_id, 'FACE_REGISTRATION_FAILED:AI_MISCONFIGURED'); return fail(res, 503, "Face service is misconfigured. Ask the administrator to check INTERNAL_API_KEY in server/.env and python_ai/.env.", { code: 'AI_MISCONFIGURED' }); }
         if (r.data && r.data.success) await audit(voter_id, 'FACE_REGISTERED');
@@ -342,11 +389,12 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
 
 router.get('/all', requireAdmin, async (req, res) => {
     try {
-        const [rows] = await db.query(`SELECT v.voter_id, v.name, v.age, v.has_voted, v.is_eligible, v.face_encoding IS NOT NULL AS face_registered,
+        const [rows] = await db.query(`SELECT v.voter_id, v.name, v.age, v.gender, v.district, v.demo_identity_masked, v.has_voted, v.is_eligible, v.face_encoding IS NOT NULL AS face_registered,
                 COALESCE(i.status, 'NOT_STARTED') AS identity_status, v.registered_at,
                 v.state_id, v.constituency_id, s.name AS state_name, k.name AS constituency_name
             FROM voters v LEFT JOIN identity_verifications i ON i.voter_id = v.voter_id
-            LEFT JOIN states s ON s.state_id = v.state_id LEFT JOIN constituencies k ON k.constituency_id = v.constituency_id ORDER BY v.registered_at DESC`);
+            LEFT JOIN states s ON s.state_id = v.state_id LEFT JOIN constituencies k ON k.constituency_id = v.constituency_id
+            WHERE v.face_encoding IS NOT NULL ORDER BY v.registered_at DESC`);
         res.json(rows);
     } catch (e) {
         console.error('voters/all error:', e.message);

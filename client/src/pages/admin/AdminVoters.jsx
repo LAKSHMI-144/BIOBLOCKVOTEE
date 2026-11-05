@@ -68,6 +68,9 @@ export default function AdminVoters() {
                     <tr>
                       <th>Voter ID</th>
                       <th>Name</th>
+                      <th>Age</th>
+                      <th>Gender</th>
+                      <th>District</th>
                       <th>State / UT</th>
                       <th>Constituency</th>
                       <th>Registration</th>
@@ -81,6 +84,9 @@ export default function AdminVoters() {
                       <tr key={v.voter_id}>
                         <td><strong>{v.voter_id}</strong></td>
                         <td>{v.name || 'Unknown voter'}</td>
+                        <td>{v.age ?? '—'}</td>
+                        <td>{v.gender || '—'}</td>
+                        <td>{v.district || '—'}</td>
                         <td>{v.state_name || '—'}</td>
                         <td>{displayConstituencyName(v.constituency_name) || <span className="bb-badge warn">Not set</span>}</td>
                         <td>{badge(Boolean(v.is_eligible), 'Eligible', 'Not eligible')}</td>

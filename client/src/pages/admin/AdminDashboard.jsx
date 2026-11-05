@@ -16,7 +16,7 @@ const Metric = ({ icon, label, value, hint, tone }) => (
 export default function AdminDashboard() {
   const { data: d, error, loading, reload } = useLoad(() => adminApi.get('/admin/dashboard-stats'))
 
-  const voteRows = (d?.by_candidate || []).map((c, i) => ({
+  const voteRows = (d?.by_candidate || []).filter(c => Number(c.votes) > 0).map((c, i) => ({
     key: c.candidate_id,
     label: c.party_abbr ? `${displayCandidateName(c.name)} (${c.party_abbr})` : displayCandidateName(c.name),
     value: Number(c.votes),
@@ -50,8 +50,8 @@ export default function AdminDashboard() {
     <div className="bb-dashboard-shell">
       <div className="bb-header-strip">
         <div>
-          <h1 className="bb-dashboard-title">Election Command Center</h1>
-          <p className="bb-dashboard-subtitle">Live figures from application data.</p>
+          <h1 className="bb-dashboard-title">Lok Sabha Election Command Center</h1>
+          <p className="bb-dashboard-subtitle">India-wide General Election simulation · parliamentary candidates by constituency.</p>
         </div>
         <div className="bb-header-status">
           <button type="button" className="bb-button ghost" onClick={reload} disabled={loading}><IconRefresh /> Refresh</button>
@@ -66,7 +66,7 @@ export default function AdminDashboard() {
           <div className="bb-metrics-grid">
             <Metric icon={<IconUsers />} label="Registered voters" value={d.voters.registered} hint={`${d.voters.face_registered} with a registered face`} tone="indigo" />
             <Metric icon={<IconShield />} label="Eligible voters" value={d.voters.eligible} hint={`${d.voters.registered - d.voters.eligible} not eligible`} tone="purple" />
-            <Metric icon={<IconBallot />} label="Candidates" value={d.candidates.total} hint={`${d.candidates.active} active on ballots`} tone="amber" />
+            <Metric icon={<IconBallot />} label="Candidates" value={d.candidates.total} hint={`${d.scope.parliamentary_constituencies} parliamentary seats · ${d.candidates.active} active demo entries`} tone="amber" />
             <Metric icon={<IconCheck />} label="Votes cast" value={d.votes.total} hint={`${d.voters.remaining_eligible} eligible voters yet to vote`} tone="green" />
           </div>
 
@@ -88,7 +88,13 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {(d.voters.without_constituency > 0 || d.candidates.unassigned > 0 || !d.votes.consistent || mismatch) && (
+
+          <div className="bb-inline-note" role="note">
+            <strong>National coverage:</strong> {d.scope.parliamentary_constituencies} Lok Sabha constituencies across {d.scope.states} states and {d.scope.union_territories} Union Territories · four synthetic party options per constituency.
+            <div style={{ marginTop: 6 }}>Voters choose one Member of Parliament candidate from their own constituency. The Prime Minister is determined through Lok Sabha majority and government formation; voters do not cast a separate nationwide vote directly for Prime Minister. All preloaded candidate names are fictional placeholders for this academic simulation.</div>
+          </div>
+
+                    {(d.voters.without_constituency > 0 || d.candidates.unassigned > 0 || !d.votes.consistent || mismatch) && (
             <div className="bb-inline-note" role="status">
               {d.voters.without_constituency > 0 && <div>{d.voters.without_constituency} voter(s) have no constituency and cannot see a ballot.</div>}
               {d.candidates.unassigned > 0 && <div>{d.candidates.unassigned} candidate(s) have no party or constituency and cannot be activated.</div>}
@@ -99,11 +105,11 @@ export default function AdminDashboard() {
 
           <div className="bb-dashboard-chart-grid">
             <section className="bb-panel">
-              <div className="bb-panel-header"><span>Candidates by party</span><small>candidate records</small></div>
+              <div className="bb-panel-header"><span>Demo candidates by party</span><small>four party options per seat</small></div>
               <DonutChart items={partyRows} centerLabel="candidates" emptyTitle="No candidate data available" emptyText="Candidate counts appear when candidate records are added." ariaLabel="Candidate records by party" />
             </section>
             <section className="bb-panel">
-              <div className="bb-panel-header"><span>Candidates by state / UT</span><small>{stateCount} states + {utCount} UTs · {zeroCandidateRegions} with 0</small></div>
+              <div className="bb-panel-header"><span>Parliamentary candidates by state / UT</span><small>{stateCount} states + {utCount} UTs · {zeroCandidateRegions} with 0</small></div>
               <div className="bb-dashboard-state-chart">
                 <BarChart items={stateRows} unit="candidates" emptyTitle="No candidate data available" emptyText="State totals appear when candidates are assigned to a constituency." />
               </div>
@@ -113,10 +119,36 @@ export default function AdminDashboard() {
               <DonutChart items={participationRows} centerLabel="eligible" emptyTitle="No eligible voters" emptyText="Participation data is unavailable until eligible voters are registered." ariaLabel="Voting participation among eligible voters" />
             </section>
             <section className="bb-panel">
-              <div className="bb-panel-header"><span>Votes per candidate</span><Link className="bb-panel-link" to="/admin/results">Results</Link></div>
+              <div className="bb-panel-header"><span>Votes recorded by candidate</span><Link className="bb-panel-link" to="/admin/results">Results</Link></div>
               <div className="bb-dashboard-votes-chart">
                 <BarChart items={voteRows} emptyTitle="No voting data available yet" emptyText="Votes per candidate appear here after votes are recorded." />
               </div>
+            </section>
+            <section className="bb-panel">
+              <div className="bb-panel-header"><span>Lok Sabha seat tally</span><small>{d.parliamentary.seats_counted} / {d.scope.parliamentary_constituencies} seats counted</small></div>
+              {d.parliamentary.seats_counted === 0 ? (
+                <div className="bb-empty-panel">
+                  <h3>No constituency results yet</h3>
+                  <p>Each seat is counted after at least one vote is recorded in that constituency.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="bb-dashboard-subtitle" style={{ marginBottom: 12 }}>
+                    {d.parliamentary.majority_party
+                      ? `${d.parliamentary.majority_party.party_name} has reached the simulated majority mark.`
+                      : `${d.parliamentary.leading_party.party_name} is currently leading by seats; no party has reached a majority yet.`}
+                  </p>
+                  <div className="bb-table-shell">
+                    <table className="bb-table">
+                      <thead><tr><th>Party</th><th>Seats won</th></tr></thead>
+                      <tbody>{d.parliamentary.seats_by_party.map(p => (
+                        <tr key={p.party_id}><td><strong>{p.party_name}</strong> <small>({p.party_abbr})</small></td><td>{p.seats_won}</td></tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+              <p className="bb-sub" style={{ marginTop: 12 }}>Majority mark: {d.parliamentary.majority_mark} of {d.scope.parliamentary_constituencies} seats. This is a PM-formation simulation, not a direct PM ballot.</p>
             </section>
           </div>
         </>

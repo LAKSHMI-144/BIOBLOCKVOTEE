@@ -17,7 +17,7 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
         const t = await tally();
         const [[c]] = await db.query(`SELECT COUNT(*) total, COALESCE(SUM(is_active),0) active, COALESCE(SUM(party_id IS NULL OR constituency_id IS NULL),0) unassigned FROM candidates`).then(([x]) => [x]);
         const [candidateCountsByParty] = await db.query(`SELECT COALESCE(p.party_id, 0) party_id, COALESCE(p.name, 'Unassigned') party_name, COUNT(*) candidates,
-                COALESCE(SUM(c.description LIKE 'DEMO DATA - Fictional%'), 0) demo_candidates
+                COALESCE(SUM(c.description LIKE 'SYNTHETIC DEMO DATA%'), 0) demo_candidates
             FROM candidates c LEFT JOIN parties p ON p.party_id = c.party_id
             GROUP BY p.party_id, p.name ORDER BY candidates DESC, party_name`);
         const [candidateCountsByState] = await db.query(`SELECT s.state_id, s.name state_name, s.kind, COUNT(c.candidate_id) candidates,
@@ -34,6 +34,29 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
         const [[a]] = await db.query(`SELECT COUNT(*) total, COALESCE(SUM(DATE(timestamp) = CURDATE()),0) today, COALESCE(SUM(status='FAILED'),0) failed, COALESCE(SUM(status='DENIED'),0) denied FROM audit_log`).then(([x]) => [x]);
         const [recent] = await db.query("SELECT id, voter_id, actor, action, event_type, status, details, timestamp FROM audit_log ORDER BY id DESC LIMIT 8");
         const e = await election.current();
+        const [[scope]] = await db.query("SELECT (SELECT COUNT(*) FROM states WHERE kind = 'STATE') AS states, (SELECT COUNT(*) FROM states WHERE kind = 'UT') AS union_territories, (SELECT COUNT(*) FROM constituencies WHERE kind = 'PARLIAMENTARY' AND is_active = TRUE) AS parliamentary_constituencies").then(([x]) => [x]);
+        // A parliamentary seat is counted for the party whose constituency candidate leads that seat,
+        // but only after at least one vote exists in that constituency. Ties use candidate_id as a stable demo tie-break.
+        const [seatWinners] = await db.query(`SELECT constituency_id, party_id, party_name, party_abbr, votes
+            FROM (
+                SELECT c.constituency_id, p.party_id, p.name AS party_name, p.abbreviation AS party_abbr,
+                    c.vote_count AS votes,
+                    ROW_NUMBER() OVER (PARTITION BY c.constituency_id ORDER BY c.vote_count DESC, c.candidate_id ASC) AS seat_rank,
+                    SUM(c.vote_count) OVER (PARTITION BY c.constituency_id) AS constituency_votes
+                FROM candidates c JOIN parties p ON p.party_id = c.party_id
+                WHERE c.election_id = ? AND c.is_active = TRUE
+            ) ranked
+            WHERE seat_rank = 1 AND constituency_votes > 0`, [e?.election_id ?? 0]);
+        const seatMap = new Map();
+        for (const winner of seatWinners) {
+            const current = seatMap.get(winner.party_id) || { party_id: winner.party_id, party_name: winner.party_name, party_abbr: winner.party_abbr, seats_won: 0 };
+            current.seats_won += 1;
+            seatMap.set(winner.party_id, current);
+        }
+        const seatsByParty = [...seatMap.values()].sort((a, b) => b.seats_won - a.seats_won || a.party_name.localeCompare(b.party_name));
+        const leadingParty = seatsByParty[0] || null;
+        const totalSeats = Number(scope.parliamentary_constituencies);
+        const majorityMark = Math.floor(totalSeats / 2) + 1;
 
         let blockchain = { available: false };
         try {
@@ -43,6 +66,14 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
 
         const eligible = Number(v.eligible), voted = Number(v.voted);
         res.json({
+            scope: { states: Number(scope.states), union_territories: Number(scope.union_territories), parliamentary_constituencies: totalSeats },
+            parliamentary: {
+                majority_mark: majorityMark,
+                seats_counted: seatWinners.length,
+                seats_by_party: seatsByParty,
+                leading_party: leadingParty,
+                majority_party: leadingParty && leadingParty.seats_won >= majorityMark ? leadingParty : null
+            },
             election: e ? { name: e.name, status: e.effective_status, type: e.election_type, open: e.open, start_time: e.start_time, end_time: e.end_time } : null,
             voters: { registered: Number(v.registered), eligible, face_registered: Number(v.face_registered), voted, remaining_eligible: Number(v.remaining),
                 turnout_percent: eligible ? Math.round((voted / eligible) * 1000) / 10 : 0, without_constituency: Number(v.no_constituency) },

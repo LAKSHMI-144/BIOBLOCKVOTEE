@@ -11,7 +11,7 @@ const origins = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',')
 // Dev convenience: Vite may pick 5174+ or be opened via 127.0.0.1, so any local port is allowed outside production.
 const localDev = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 app.use(cors({ origin: (o, cb) => cb(null, !o || origins.includes(o) || (process.env.NODE_ENV !== 'production' && localDev.test(o))) }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 app.use('/api/voters', require('./routes/voterRoutes'));
 app.use('/api/votes', require('./routes/voteRoutes'));

@@ -8,11 +8,19 @@ CREATE TABLE IF NOT EXISTS voters (
     age INT NOT NULL,
     gender VARCHAR(10),
     address TEXT,
+    district VARCHAR(100) NULL,
+    demo_identity_hash CHAR(64) NULL,
+    demo_identity_masked VARCHAR(20) NULL,
     has_voted BOOLEAN DEFAULT FALSE,
     is_eligible BOOLEAN NOT NULL DEFAULT TRUE,
     face_encoding LONGTEXT,              -- ENCRYPTED embedding (never raw images)
     face_registered_at TIMESTAMP NULL,
     registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS voter_id_counters (
+    sequence_name VARCHAR(30) PRIMARY KEY,
+    next_value BIGINT UNSIGNED NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS candidates (

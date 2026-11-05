@@ -260,7 +260,10 @@ export default function Vote({ mode = 'auth' }) {
           <p className="hint" style={{ marginBottom: 12 }}>{t('vote.voter', { name: voter?.name, id: voter?.id })}</p>
           {closed && <p className="msg error" role="alert" style={{ textAlign: 'left' }}>{t('vote.closed')}</p>}
           {ballot && <p className="hint" style={{ marginBottom: 12 }}>{t('vote.ballotFor', { constituency: displayConstituencyName(ballot.name), state: ballot.state })}</p>}
-          <h3 style={{ marginBottom: 12 }}>{t('vote.select')}</h3>
+          <div className="bb-inline-note" role="note" style={{ marginBottom: 14 }}>
+            Academic Lok Sabha election simulation only. Candidate names and party allocations are fictional demo placeholders, not official nominations. You are choosing a Member of Parliament candidate for this constituency; government formation and the Prime Minister are determined by the Lok Sabha majority.
+          </div>
+          <h3 style={{ marginBottom: 12 }}>Choose one Lok Sabha candidate</h3>
           {candidates.length === 0 && !noBallot && <p className="hint">{t('vote.noCandidates')}</p>}
           {candidates.map(c => (
             <label key={c.candidate_id} className="cand-option">

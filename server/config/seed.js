@@ -1,12 +1,8 @@
-// Illustrative master data. Idempotent: rows are inserted only when missing (INSERT IGNORE on the unique keys),
-// so an administrator's later edits, renames or deactivations are never overwritten.
-//
-// IMPORTANT - this is not an official or exhaustive list. Demo candidates are fictional and are never voters.
-//  * States / Union Territories: India has 28 states and 8 UTs (ISO 3166-2:IN codes).
-//  * Parties: BJP and INC contest in every state; the other parties are linked only to states where they are well
-//    known. Recognition status (national/state) is deliberately NOT stored – it changes after elections.
-//  * Constituencies: Karnataka's parliamentary list plus clearly labelled demo assembly constituencies in ten states.
+// India-wide master data. Idempotent: state, party and constituency rows are inserted only when missing.
+// The 543 Parliamentary Constituency names are based on ECI Atlas 2024, pages 17–19.
+// Candidates are seeded separately by the explicit reset-election-demo script and are always labelled demo.
 const db = require('./db');
+const LOK_SABHA_CONSTITUENCIES = require('./lokSabhaConstituencies');
 
 const STATES = [
     ['AP', 'Andhra Pradesh'], ['AR', 'Arunachal Pradesh'], ['AS', 'Assam'], ['BR', 'Bihar'], ['CG', 'Chhattisgarh'],
@@ -21,7 +17,7 @@ const UNION_TERRITORIES = [
     ['DL', 'Delhi'], ['JK', 'Jammu and Kashmir'], ['LA', 'Ladakh'], ['LD', 'Lakshadweep'], ['PY', 'Puducherry']
 ];
 
-// [name, abbreviation, all_states, [state codes], notes]
+// [name, abbreviation, all_states, [state codes], notes]. Demo constituency options are configured by state in reset-election-demo.js.
 const PARTIES = [
     ['Bharatiya Janata Party', 'BJP', true, [], null],
     ['Indian National Congress', 'INC', true, [], null],
@@ -63,95 +59,60 @@ const PARTIES = [
     ['All India N.R. Congress', 'AINRC', false, ['PY'], null]
 ];
 
-const KARNATAKA_PARLIAMENTARY = ['Chikkodi', 'Belgaum', 'Bagalkot', 'Bijapur', 'Gulbarga', 'Raichur', 'Bidar', 'Koppal', 'Bellary',
-    'Haveri', 'Dharwad', 'Uttara Kannada', 'Davanagere', 'Shimoga', 'Udupi Chikmagalur', 'Hassan', 'Dakshina Kannada', 'Chitradurga',
-    'Tumkur', 'Mandya', 'Mysore', 'Chamarajanagar', 'Bangalore Rural', 'Bangalore North', 'Bangalore Central', 'Bangalore South',
-    'Chikkaballapur', 'Kolar'];
-
-// Six fictional names per state, attached only to clearly labelled demonstration constituencies.
-const DEMO_CANDIDATES = {
-    KA: [['Anaya Bhatkal', 'BJP'], ['Veer Mallesh', 'INC'], ['Isha Soman', 'JD(S)'], ['Kabir Hegde', 'IND'], ['Tara Devadiga', 'IND'], ['Nikhil Rayan', 'IND']],
-    TN: [['Iniya Velan', 'DMK'], ['Arul Kannan', 'AIADMK'], ['Mira Senthil', 'BJP'], ['Kavin Arasu', 'INC'], ['Yazhini Muthu', 'IND'], ['Rohan Ilango', 'IND']],
-    KL: [['Nila Menon', 'CPI(M)'], ['Adith Nair', 'IUML'], ['Maya Kurup', 'INC'], ['Rithu Varma', 'BJP'], ['Devika Balan', 'IND'], ['Ahan Thomas', 'IND']],
-    AP: [['Saanvi Kiran', 'TDP'], ['Vihan Reddy', 'YSRCP'], ['Charvi Naidu', 'BJP'], ['Reyan Prasad', 'INC'], ['Tara Vamsi', 'IND'], ['Nirav Chandra', 'IND']],
-    TS: [['Aadhya Rao', 'BRS'], ['Ishaan Mirza', 'AIMIM'], ['Navya Goud', 'BJP'], ['Ritvik Anand', 'INC'], ['Saira Kiran', 'IND'], ['Keshav Varma', 'IND']],
-    MH: [['Aarohi Deshmukh', 'SHS'], ['Neel Patil', 'NCP'], ['Ira Kulkarni', 'BJP'], ['Omkar Jadhav', 'INC'], ['Mihir Sawant', 'IND'], ['Rhea Bhosale', 'IND']],
-    UP: [['Aarav Shekhar', 'SP'], ['Meera Sengar', 'BSP'], ['Rishit Awasthi', 'BJP'], ['Tanya Qureshi', 'INC'], ['Dev Malhotra', 'IND'], ['Ishita Suri', 'IND']],
-    GJ: [['Kavya Trivedi', 'BJP'], ['Aarush Mehta', 'INC'], ['Niyati Desai', 'AAP'], ['Rohan Vyas', 'IND'], ['Mira Parmar', 'IND'], ['Vivan Shah', 'IND']],
-    RJ: [['Aditi Rathore', 'BJP'], ['Lakshya Purohit', 'INC'], ['Navin Choudhary', 'BSP'], ['Ira Bhandari', 'AAP'], ['Reva Solanki', 'IND'], ['Aman Khatri', 'IND']],
-    WB: [['Anik Banerjee', 'AITC'], ['Riya Chatterjee', 'CPI(M)'], ['Soham Dutta', 'BJP'], ['Mili Ghosh', 'INC'], ['Arjun Roy', 'IND'], ['Tithi Sen', 'IND']]
-};
-
 async function seed() {
     const done = [];
     let added = 0;
-    for (const [code, name] of STATES) added += (await db.query('INSERT IGNORE INTO states (code, name, kind) VALUES (?,?,?)', [code, name, 'STATE']))[0].affectedRows;
-    for (const [code, name] of UNION_TERRITORIES) added += (await db.query('INSERT IGNORE INTO states (code, name, kind) VALUES (?,?,?)', [code, name, 'UT']))[0].affectedRows;
-    if (added) done.push(`+ ${added} states / union territories`);
+    for (const [code, name] of STATES)
+        added += (await db.query('INSERT IGNORE INTO states (code, name, kind) VALUES (?,?,?)', [code, name, 'STATE']))[0].affectedRows;
+    for (const [code, name] of UNION_TERRITORIES)
+        added += (await db.query('INSERT IGNORE INTO states (code, name, kind) VALUES (?,?,?)', [code, name, 'UT']))[0].affectedRows;
+    if (added) done.push('+' + added + ' states / union territories');
 
-    const [st] = await db.query('SELECT state_id, code FROM states');
-    const byCode = Object.fromEntries(st.map(s => [s.code, s.state_id]));
+    const [stateRows] = await db.query('SELECT state_id, code FROM states');
+    const byCode = Object.fromEntries(stateRows.map(s => [s.code, s.state_id]));
+
     let partyCount = 0;
     for (const [name, abbr, all, codes, notes] of PARTIES) {
-        const [r] = await db.query('INSERT IGNORE INTO parties (name, abbreviation, all_states, notes) VALUES (?,?,?,?)', [name, abbr, all, notes]);
+        const [r] = await db.query(
+            'INSERT IGNORE INTO parties (name, abbreviation, all_states, notes) VALUES (?,?,?,?)',
+            [name, abbr, all, notes]
+        );
         if (r.affectedRows) {
             partyCount += r.affectedRows;
-            for (const c of codes) if (byCode[c]) await db.query('INSERT IGNORE INTO party_states (party_id, state_id) VALUES (?,?)', [r.insertId, byCode[c]]);
-        }
-    }
-    if (partyCount) done.push(`+ ${partyCount} illustrative parties`);
-
-    const [[{ n: nCons }]] = await db.query('SELECT COUNT(*) n FROM constituencies');
-    if (nCons === 0) {
-        for (const name of KARNATAKA_PARLIAMENTARY)
-            await db.query("INSERT IGNORE INTO constituencies (state_id, name, kind) VALUES (?,?, 'PARLIAMENTARY')", [byCode.KA, name]);
-        done.push(`+ ${KARNATAKA_PARLIAMENTARY.length} Karnataka parliamentary constituencies`);
-    }
-
-    const [partyRows] = await db.query('SELECT party_id, name, abbreviation, all_states FROM parties');
-    const seededParties = new Map(partyRows.map(p => [`${p.name}\u0000${p.abbreviation}`, p]));
-    const partyByAbbr = Object.fromEntries(PARTIES.map(([name, abbreviation]) => {
-        const party = seededParties.get(`${name}\u0000${abbreviation}`);
-        return party ? [abbreviation, party] : null;
-    }).filter(Boolean));
-    const partyCanContest = async (party, state_id) => {
-        if (party.all_states) return true;
-        const [scope] = await db.query('SELECT 1 FROM party_states WHERE party_id = ? AND state_id = ?', [party.party_id, state_id]);
-        return scope.length > 0;
-    };
-    let demoCons = 0, demoCandidates = 0;
-    for (const [code, candidates] of Object.entries(DEMO_CANDIDATES)) {
-        const state_id = byCode[code];
-        if (!state_id) continue;
-        for (let i = 0; i < candidates.length; i++) {
-            const name = `Demonstration Assembly Constituency ${String(i + 1).padStart(2, '0')}`;
-            const [inserted] = await db.query("INSERT IGNORE INTO constituencies (state_id, name, kind) VALUES (?, ?, 'ASSEMBLY')", [state_id, name]);
-            demoCons += inserted.affectedRows;
-            const [[constituency]] = await db.query("SELECT constituency_id FROM constituencies WHERE state_id = ? AND name = ? AND kind = 'ASSEMBLY'", [state_id, name]).then(([rows]) => [rows]);
-            if (!constituency) continue;
-            const [illustrativeName, requestedAbbreviation] = candidates[i];
-            const candidateName = `Demo Candidate - ${illustrativeName}`;
-            let abbreviation = requestedAbbreviation;
-            let party = partyByAbbr[abbreviation];
-            if (!party && abbreviation !== 'IND') { abbreviation = 'IND'; party = partyByAbbr.IND; }
-            if (!party) continue;
-            if (!(await partyCanContest(party, state_id))) {
-                if (abbreviation === 'IND') continue;
-                abbreviation = 'IND';
-                party = partyByAbbr.IND;
-                if (!party || !(await partyCanContest(party, state_id))) continue;
+            for (const code of codes) {
+                if (byCode[code]) await db.query(
+                    'INSERT IGNORE INTO party_states (party_id, state_id) VALUES (?,?)',
+                    [r.insertId, byCode[code]]
+                );
             }
-            const [existing] = await db.query('SELECT candidate_id FROM candidates WHERE name = ? AND constituency_id = ? LIMIT 1', [candidateName, constituency.constituency_id]);
-            if (existing.length) continue;
-            const description = 'DEMO DATA - Fictional candidate for UI demonstration only; not an actual election candidate.';
-            const [created] = await db.query(`INSERT INTO candidates (name, party, party_id, description, position, election_id, constituency_id, is_active, status)
-                VALUES (?, ?, ?, ?, ?, NULL, ?, FALSE, 'Inactive')`, [candidateName, abbreviation, party.party_id, description, 'Demonstration candidate', constituency.constituency_id]);
-            demoCandidates += created.affectedRows;
         }
     }
-    if (demoCons) done.push(`+ ${demoCons} demonstration constituencies`);
-    if (demoCandidates) done.push(`+ ${demoCandidates} fictional demonstration candidates`);
+    if (partyCount) done.push('+' + partyCount + ' illustrative party master records');
+
+    let constituencyCount = 0;
+    for (const [code, names] of Object.entries(LOK_SABHA_CONSTITUENCIES)) {
+        const stateId = byCode[code];
+        if (!stateId) throw new Error('Missing state / UT master row for code ' + code);
+        // Deactivate stale/old parliamentary labels within this jurisdiction.
+        await db.query(
+            "UPDATE constituencies SET is_active = FALSE WHERE state_id = ? AND kind = 'PARLIAMENTARY' AND name NOT IN (?)",
+            [stateId, names]
+        );
+        for (const name of names) {
+            const [r] = await db.query(
+                "INSERT IGNORE INTO constituencies (state_id, name, kind, is_active) VALUES (?, ?, 'PARLIAMENTARY', TRUE)",
+                [stateId, name]
+            );
+            constituencyCount += r.affectedRows;
+        }
+        // Re-enable only the exact current ECI roster names for this jurisdiction.
+        await db.query(
+            "UPDATE constituencies SET is_active = TRUE WHERE state_id = ? AND kind = 'PARLIAMENTARY' AND name IN (?)",
+            [stateId, names]
+        );
+    }
+    if (constituencyCount) done.push('+' + constituencyCount + ' Lok Sabha parliamentary constituencies');
     return done;
 }
 module.exports = seed;
-module.exports.DATA = { STATES, UNION_TERRITORIES, PARTIES, KARNATAKA_PARLIAMENTARY, DEMO_CANDIDATES };
+module.exports.DATA = { STATES, UNION_TERRITORIES, PARTIES, LOK_SABHA_CONSTITUENCIES };

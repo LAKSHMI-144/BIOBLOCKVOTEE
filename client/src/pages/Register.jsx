@@ -8,14 +8,16 @@ import { displayConstituencyName } from '../lib/adminFormat'
 import { API, apiError, regToken, bearer } from '../api'
 
 const MIN_IMAGES = 3, MAX_IMAGES = 5
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 const VIDEO = { width: 640, height: 480, facingMode: 'user' }
-const ID_RE = /^[A-Z0-9-]{4,20}$/, NAME_RE = /^\p{L}[\p{L}\p{M}\s.'-]{1,98}$/u, PHONE_RE = /^[6-9]\d{9}$/
-const EMPTY = { voter_id: '', name: '', age: '', gender: '', address: '', state_id: '', constituency_id: '' }
+const NAME_RE = /^\p{L}[\p{L}\p{M}\s.'-]{1,98}$/u
+const EMPTY = { voter_id: '', demo_identity_number: '', name: '', age: '', gender: '', address: '', district: '', state_id: '', constituency_id: '' }
 
 // Same rules as the server (which re-validates everything). Returns { field: errorCode }.
 function validate(f) {
-  const e = {}, id = f.voter_id.trim().toUpperCase(), name = f.name.trim().replace(/\s+/g, ' '), addr = f.address.trim(), age = Number(f.age)
-  if (!id) e.voter_id = 'ID_REQUIRED'; else if (!ID_RE.test(id)) e.voter_id = 'ID_FORMAT'
+  const e = {}, demoId = f.demo_identity_number.trim(), name = f.name.trim().replace(/\s+/g, ' '), addr = f.address.trim(), age = Number(f.age)
+  if (!/^\d{12}$/.test(demoId)) e.demo_identity_number = 'DEMO_ID_INVALID'
+  if (!f.district.trim()) e.district = 'DISTRICT_REQUIRED'
   if (!name) e.name = 'NAME_REQUIRED'; else if (!NAME_RE.test(name) || (name.match(/\p{L}/gu) || []).length < 2) e.name = 'NAME_INVALID'
   if (String(f.age).trim() === '') e.age = 'AGE_REQUIRED'; else if (!Number.isInteger(age) || age < 1 || age > 120) e.age = 'AGE_INVALID'; else if (age < 18) e.age = 'AGE_MIN'
   if (!addr) e.address = 'ADDRESS_REQUIRED'; else if (addr.length < 5) e.address = 'ADDRESS_SHORT'
@@ -38,7 +40,6 @@ export default function Register() {
   const [loading, setLoading] = useState('')       // label of the request in flight ('' = idle)
   const [msg, setMsg] = useState(null)             // { type, text }
   // identity
-  const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [otpSent, setOtpSent] = useState(null)     // { masked, hint }
   const [cooldown, setCooldown] = useState(0)
@@ -47,6 +48,9 @@ export default function Register() {
   const [cameraReady, setCameraReady] = useState(false)
   const [camError, setCamError] = useState(false)
   const [faceStatus, setFaceStatus] = useState('')
+  const [livenessToken, setLivenessToken] = useState('')
+  const [livenessFrame, setLivenessFrame] = useState('')
+  const [activeChallenge, setActiveChallenge] = useState('')
   // India master data for the ballot: state/UT, then that state's constituencies (public, read-only endpoints)
   const [states, setStates] = useState([])
   const [consts, setConsts] = useState([])
@@ -80,16 +84,16 @@ export default function Register() {
     e?.preventDefault()
     const local = validate(form)
     if (Object.keys(local).length) {
-      setErrors(Object.fromEntries(Object.entries(local).map(([f, c]) => [f, t(`err.${c}`)])))
+      setErrors(Object.fromEntries(Object.entries(local).map(([f, c]) => [f, c === 'DEMO_ID_INVALID' ? 'Enter exactly 12 digits for the synthetic demo identity number.' : c === 'DISTRICT_REQUIRED' ? 'Enter your district.' : t(`err.${c}`)])))
       return say('error', t('reg.fixErrors'))
     }
     setErrors({})
-    const body = { ...form, voter_id: form.voter_id.trim().toUpperCase(), name: form.name.trim().replace(/\s+/g, ' '), age: Number(form.age), address: form.address.trim(), state_id: Number(form.state_id), constituency_id: Number(form.constituency_id) }
+    const body = { ...form, demo_identity_number: form.demo_identity_number.trim(), name: form.name.trim().replace(/\s+/g, ' '), age: Number(form.age), address: form.address.trim(), district: form.district.trim(), state_id: Number(form.state_id), constituency_id: Number(form.constituency_id) }
     const r = await run(t('reg.checking'), () => axios.post(`${API}/voters/register`, body, bearer(regToken.get())))
     if (!r) return
     if (r.error) return setErrors(r.error.fields)
     regToken.set(r.data.registration_token)
-    setForm(f => ({ ...f, ...body, age: String(body.age), state_id: String(body.state_id), constituency_id: String(body.constituency_id) }))
+    setForm(f => ({ ...f, ...body, voter_id: r.data.voter_id, age: String(body.age), state_id: String(body.state_id), constituency_id: String(body.constituency_id) }))
     if (identityOn) {
       const s = await axios.get(`${API}/identity/status`, bearer(r.data.registration_token)).catch(() => null)   // resumed registration may already be verified
       setStep(s?.data?.verified ? 3 : 2)
@@ -98,28 +102,65 @@ export default function Register() {
 
   // ---- identity step
   const sendOtp = async () => {
-    if (!PHONE_RE.test(phone)) return say('error', t('err.PHONE_INVALID'))
+    const contact = `DEMO-${form.voter_id}`
     const r = await run(t('idv.sending'), async () => {
       const tok = regToken.get()
-      await axios.post(`${API}/identity/start`, { contact: phone }, bearer(tok))
-      return axios.post(`${API}/identity/send-otp`, { contact: phone }, bearer(tok))
+      await axios.post(`${API}/identity/start`, { contact }, bearer(tok))
+      return axios.post(`${API}/identity/send-otp`, { contact }, bearer(tok))
     })
     if (!r) return
     if (r.error) { if (r.error.retryAfter) setCooldown(r.error.retryAfter); return }
     if (r.data.already_verified) return setStep(3)
-    setOtpSent({ masked: r.data.masked, hint: r.data.dev_hint }); setOtp(''); setCooldown(r.data.resend_in || 30)
-    say('success', t('idv.sentTo', { masked: r.data.masked }))
+    setOtpSent({ hint: r.data.dev_hint }); setOtp(''); setCooldown(r.data.resend_in || 30)
+    say('success', 'Demo OTP generated. Enter the displayed test code.')
   }
   const verifyOtp = async e => {
     e?.preventDefault()
     if (!/^\d{6}$/.test(otp)) return say('error', t('idv.otp'))
-    const r = await run(t('idv.verifying'), () => axios.post(`${API}/identity/verify-otp`, { contact: phone, otp }, bearer(regToken.get())))
+    const contact = `DEMO-${form.voter_id}`
+    const r = await run(t('idv.verifying'), () => axios.post(`${API}/identity/verify-otp`, { contact, otp }, bearer(regToken.get())))
     if (!r || r.error) return
     say('success', t('idv.verified')); setStep(3)
   }
 
   // ---- face step
+  const runRegistrationLiveness = async () => {
+    if (busy.current) return
+    if (!cameraReady) return say('error', t('face.waiting'))
+    setLivenessToken(''); setLivenessFrame(''); setActiveChallenge('')
+    const r = await run('Starting live-face check...', async () => {
+      const tok = regToken.get()
+      const challengeRes = await axios.post(`${API}/voters/register-liveness-challenge`, {}, bearer(tok))
+      const { challenge_token: challengeToken, actions, frame_count: frameCount } = challengeRes.data
+      const action = actions?.[0]
+      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['blink', 'turn_left', 'turn_right'].includes(action) || ![16, 24].includes(frameCount))
+        throw new Error('The live-face challenge could not be started. Please retry.')
+      const frames = []
+      const captureFrame = () => {
+        const shot = webcamRef.current?.getScreenshot()
+        if (!shot) throw new Error('The camera frame could not be captured. Check camera access and retry.')
+        frames.push(shot.split(',')[1])
+      }
+      captureFrame(); await delay(100); captureFrame()
+      setActiveChallenge(action)
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      for (let i = 0; i < frameCount - 4; i += 1) { await delay(240); captureFrame() }
+      await delay(200); captureFrame(); await delay(100); captureFrame()
+      const liveRes = await axios.post(`${API}/voters/check-registration-liveness`, { challenge_token: challengeToken, frames }, { ...bearer(tok), timeout: 90000 })
+      const idx = liveRes.data?.identity_frame_index
+      if (!liveRes.data?.success || !liveRes.data?.liveness_token || !Number.isInteger(idx) || !frames[idx])
+        throw new Error(liveRes.data?.message || 'Live-face verification failed. Please try again.')
+      return { data: { ...liveRes.data, identity_frame: frames[idx] } }
+    })
+    setActiveChallenge('')
+    if (!r || r.error) return
+    setLivenessToken(r.data.liveness_token)
+    setLivenessFrame(r.data.identity_frame)
+    say('success', 'Live-face verification passed. Now capture 3–5 face images.')
+  }
+
   const capture = useCallback(async () => {
+    if (!livenessToken) return say('error', 'Complete the live-face challenge before capturing registration images.')
     if (busy.current) return
     if (images.length >= MAX_IMAGES) return
     const shot = webcamRef.current?.getScreenshot()
@@ -129,15 +170,15 @@ export default function Register() {
     if (!r) return
     if (r.error) return setFaceStatus(r.error.message)
     setImages(p => [...p, b64]); setFaceStatus(t('face.detected')); say('success', t('face.accepted', { n: images.length + 1 }))
-  }, [images, t])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [images, t, livenessToken])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitFace = async () => {
     if (images.length < MIN_IMAGES) return say('error', t('face.needMore', { min: MIN_IMAGES }))
-    const r = await run(t('reg.processing'), () => axios.post(`${API}/voters/register-face`, { voter_id: form.voter_id.trim().toUpperCase(), images }, bearer(regToken.get())))
+    const r = await run(t('reg.processing'), () => axios.post(`${API}/voters/register-face`, { liveness_token: livenessToken, liveness_frame: livenessFrame, images }, bearer(regToken.get())))
     if (!r) return
     setImages([])                                   // captures are never kept after a try
-    if (r.error) { if (r.error.code === 'REG_SESSION') setStep(1); return }
-    regToken.clear(); say(null); setStep(4)
+    if (r.error) { setLivenessToken(''); setLivenessFrame(''); if (r.error.code === 'REG_SESSION') setStep(1); return }
+    regToken.clear(); setLivenessToken(''); setLivenessFrame(''); say(null); setStep(4)
   }
 
   const field = (f, label, type = 'text', extra = {}) => (
@@ -164,10 +205,11 @@ export default function Register() {
 
         {step === 1 && (
           <form className="card reg-card" noValidate onSubmit={submitDetails}>
-            {field('voter_id', t('reg.voterId'), 'text', { autoComplete: 'off' })}
+            {field('demo_identity_number', '12-digit demo identity number', 'text', { inputMode: 'numeric', maxLength: 12, autoComplete: 'off' })}
             {field('name', t('reg.name'))}
             {field('age', t('reg.age'), 'number', { min: 1, max: 120 })}
             {field('address', t('reg.address'))}
+            {field('district', 'District')}
             <div>
               <label htmlFor="gender">{t('reg.gender')} *</label>
               <select id="gender" className={`input${errors.gender ? ' invalid' : ''}`} value={form.gender} disabled={!!loading} onChange={e => { setForm({ ...form, gender: e.target.value }); clearErr('gender') }}>
@@ -185,7 +227,7 @@ export default function Register() {
               {errors.state_id && <p className="field-err" role="alert">{errors.state_id}</p>}
             </div>
             <div>
-              <label htmlFor="constituency_id">{t('reg.constituency')} *</label>
+              <label htmlFor="constituency_id">Lok Sabha constituency *</label>
               <select id="constituency_id" className={`input${errors.constituency_id ? ' invalid' : ''}`} value={form.constituency_id} disabled={!!loading || !form.state_id} onChange={e => { setForm({ ...form, constituency_id: e.target.value }); clearErr('constituency_id') }}>
                 <option value="">{t('reg.constSelect')}</option>
                 {consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{displayConstituencyName(c.name)}</option>)}
@@ -193,7 +235,7 @@ export default function Register() {
               {errors.constituency_id && <p className="field-err" role="alert">{errors.constituency_id}</p>}
               {geoErr && <p className="field-err" role="alert">{t('reg.geoError')}</p>}
             </div>
-            <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 4 }}>{t('reg.constHint')}</p>
+            <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 4 }}>Select your parliamentary Lok Sabha constituency. Your ballot will show only the candidate options assigned to this constituency. This is a college simulation; candidate names are fictional demo data.</p>
             <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 14 }}>{t('reg.hint18')}</p>
             <div className="btn-row">
               <button type="submit" className="btn primary" disabled={!!loading}>{loading || t('common.next')}</button>
@@ -207,10 +249,8 @@ export default function Register() {
           <form className="card reg-card" noValidate onSubmit={otpSent ? verifyOtp : e => { e.preventDefault(); sendOtp() }}>
             <h3 style={{ textAlign: 'left' }}>{t('idv.title')}</h3>
             {(!idvInfo || idvInfo.development) && <div className="dev-banner" role="note">{t('idv.devBanner')}</div>}
-            <label htmlFor="phone">{t('idv.mobile')} *</label>
-            <input id="phone" className="input" inputMode="numeric" maxLength={10} value={phone} disabled={!!loading || !!otpSent} autoComplete="off"
-              onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} />
-            <p className="hint" style={{ textAlign: 'left', fontSize: 12.5, marginTop: 6 }}>{t('idv.mobileHint')}</p>
+            <p className="hint" style={{ textAlign: 'left', fontSize: 13 }}>College demo OTP verification. No mobile number or SMS is used.</p>
+            {otpSent?.hint && <p className="hint" style={{ textAlign: 'left', fontSize: 13 }}>{otpSent.hint}</p>}
             {otpSent && (
               <>
                 <label htmlFor="otp">{t('idv.otp')}</label>
@@ -218,12 +258,12 @@ export default function Register() {
                   onChange={e => setOtp(e.target.value.replace(/\D/g, ''))} placeholder="______" />
                 <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 8 }}>
                   {cooldown > 0 ? t('idv.resendIn', { s: cooldown }) : <button type="button" className="link-btn" onClick={sendOtp} disabled={!!loading}>{t('idv.resend')}</button>}
-                  {' · '}<button type="button" className="link-btn" onClick={() => { setOtpSent(null); setOtp(''); say(null) }} disabled={!!loading}>{t('idv.change')}</button>
+                  {' · '}<button type="button" className="link-btn" onClick={() => { setOtpSent(null); setOtp(''); say(null) }} disabled={!!loading}>Restart demo OTP</button>
                 </p>
               </>
             )}
             <div className="btn-row">
-              <button type="submit" className="btn primary" disabled={!!loading || (otpSent ? otp.length !== 6 : phone.length !== 10)}>{loading || (otpSent ? t('idv.verify') : t('idv.sendOtp'))}</button>
+              <button type="submit" className="btn primary" disabled={!!loading || (otpSent ? otp.length !== 6 : false)}>{loading || (otpSent ? t('idv.verify') : 'Generate demo OTP')}</button>
               <button type="button" className="btn secondary" disabled={!!loading} onClick={() => { say(null); setStep(1) }}>{t('common.back')}</button>
             </div>
             {msgEl}
@@ -237,7 +277,9 @@ export default function Register() {
               {['face.i1', 'face.i2', 'face.i3', 'face.i4', 'face.i5'].map(k => <li key={k}>{t(k)}</li>)}
               <li>{t('face.i6', { min: MIN_IMAGES })}</li>
             </ol>
-            <p className="hint">{t('reg.voterId')}: <b>{form.voter_id.trim().toUpperCase()}</b></p>
+            <p className="hint">{livenessToken ? 'Live-face check passed.' : 'Complete the live-face check first.'}</p>
+            <p className="hint">Your voter ID will be generated automatically.</p>
+            {activeChallenge && <p className="prompt">{activeChallenge === 'blink' ? 'Blink now.' : activeChallenge === 'turn_left' ? 'Turn your head slightly left now.' : 'Turn your head slightly right now.'}</p>}
             <p className="prompt">{images.length < MAX_IMAGES ? t(`face.prompt${images.length + 1}`) : t('face.allCaptured')}</p>
             <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg" screenshotQuality={0.92} videoConstraints={VIDEO}
               className="webcam" style={{ width: 320, maxWidth: '100%' }}
@@ -246,7 +288,8 @@ export default function Register() {
             <div className="dots">{Array.from({ length: MAX_IMAGES }).map((_, i) => <div key={i} className={`dot ${i < images.length ? 'filled' : ''}`} />)}</div>
             <p className="hint">{t('face.progress', { n: images.length, min: MIN_IMAGES, max: MAX_IMAGES })}</p>
             <div className="btn-row">
-              <button type="button" className="btn danger" onClick={capture} disabled={!!loading || !cameraReady || images.length >= MAX_IMAGES}>📸 {t('face.capture')}</button>
+              {!livenessToken && <button type="button" className="btn primary" onClick={runRegistrationLiveness} disabled={!!loading || !cameraReady}>Start live-face check</button>}
+              <button type="button" className="btn danger" onClick={capture} disabled={!!loading || !cameraReady || !livenessToken || images.length >= MAX_IMAGES}>📸 {t('face.capture')}</button>
               <button type="button" className="btn secondary" onClick={() => { setImages([]); setFaceStatus(''); say(null) }} disabled={!!loading || images.length === 0}>↺ {t('face.retake')}</button>
               <button type="button" className="btn primary" onClick={submitFace} disabled={!!loading || images.length < MIN_IMAGES}>{loading === t('reg.processing') ? t('reg.processing') : t('face.register')}</button>
               <button type="button" className="btn secondary" disabled={!!loading} onClick={() => { say(null); setStep(identityOn ? 2 : 1) }}>{t('common.back')}</button>
@@ -260,6 +303,8 @@ export default function Register() {
             <div className="big-icon">✅</div>
             <h3 style={{ color: 'var(--ok)' }}>{t('reg.success')}</h3>
             <p className="hint">{t('face.registered')} {t('reg.successHint')}</p>
+            <p className="hint">Your automatically generated Voter ID:</p>
+            <h2 style={{ letterSpacing: 2 }}>{form.voter_id}</h2>
             <div className="btn-row" style={{ justifyContent: 'center' }}><Link className="btn primary" to="/voter/login">{t('reg.goLogin')}</Link></div>
           </div>
         )}

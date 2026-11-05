@@ -10,8 +10,11 @@ const hasFk = (t, n) => has("SELECT 1 FROM information_schema.TABLE_CONSTRAINTS 
 const TABLES = {
     voters: `CREATE TABLE IF NOT EXISTS voters (
         voter_id VARCHAR(20) PRIMARY KEY, name VARCHAR(100) NOT NULL, age INT NOT NULL, gender VARCHAR(10), address TEXT,
+        district VARCHAR(100) NULL, demo_identity_hash CHAR(64) NULL, demo_identity_masked VARCHAR(20) NULL,
         has_voted BOOLEAN DEFAULT FALSE, is_eligible BOOLEAN NOT NULL DEFAULT TRUE, face_encoding LONGTEXT,
         face_registered_at TIMESTAMP NULL, registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    voter_id_counters: `CREATE TABLE IF NOT EXISTS voter_id_counters (
+        sequence_name VARCHAR(30) PRIMARY KEY, next_value BIGINT UNSIGNED NOT NULL)`,
     candidates: `CREATE TABLE IF NOT EXISTS candidates (
         candidate_id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, party VARCHAR(100) NOT NULL,
         symbol VARCHAR(10), vote_count INT DEFAULT 0)`,
@@ -68,6 +71,9 @@ async function ensureSchema() {
     const cols = [
         ['voters', 'is_eligible', 'BOOLEAN NOT NULL DEFAULT TRUE'],
         ['voters', 'face_registered_at', 'TIMESTAMP NULL'],
+        ['voters', 'district', 'VARCHAR(100) NULL'],
+        ['voters', 'demo_identity_hash', 'CHAR(64) NULL'],
+        ['voters', 'demo_identity_masked', 'VARCHAR(20) NULL'],
         ['candidates', 'description', 'VARCHAR(500) NULL'],
         ['candidates', 'is_active', 'BOOLEAN NOT NULL DEFAULT TRUE'],
         ['candidates', 'election_id', 'INT NULL'],
@@ -96,10 +102,20 @@ async function ensureSchema() {
         ['audit_log', 'idx_audit_event', 'event_type'],
         ['audit_log', 'idx_audit_time', 'timestamp'],
         ['voters', 'idx_voters_constituency', 'constituency_id'],
+        ['voters', 'uq_voters_demo_identity_hash', 'demo_identity_hash'],
         ['candidates', 'idx_candidates_constituency', 'constituency_id'],
         ['candidates', 'idx_candidates_party', 'party_id']
     ];
-    for (const [t, i, c] of idx) if (!(await hasIndex(t, i))) { await db.query(`ALTER TABLE \`${t}\` ADD INDEX \`${i}\` (\`${c}\`)`); done.push(`+ index ${i}`); }
+    for (const [t, i, c] of idx) if (!(await hasIndex(t, i))) {
+        const unique = i === 'uq_voters_demo_identity_hash' ? 'UNIQUE ' : '';
+        await db.query(`ALTER TABLE \`${t}\` ADD ${unique}INDEX \`${i}\` (\`${c}\`)`);
+        done.push(`+ ${unique ? 'unique ' : ''}index ${i}`);
+    }
+
+    // Seed the counter from the highest existing V### ID without moving it backwards on later starts.
+    const [[maxVoter]] = await db.query("SELECT COALESCE(MAX(CAST(SUBSTRING(voter_id, 2) AS UNSIGNED)), 0) AS max_id FROM voters WHERE voter_id REGEXP '^V[0-9]+$'");
+    const nextVoterId = Number(maxVoter.max_id || 0) + 1;
+    await db.query("INSERT INTO voter_id_counters (sequence_name, next_value) VALUES ('voter', ?) ON DUPLICATE KEY UPDATE next_value = GREATEST(next_value, VALUES(next_value))", [nextVoterId]);
 
     if (!(await hasFk('candidates', 'fk_candidates_election'))) {
         await db.query("ALTER TABLE candidates ADD CONSTRAINT fk_candidates_election FOREIGN KEY (election_id) REFERENCES elections(election_id) ON DELETE SET NULL");
