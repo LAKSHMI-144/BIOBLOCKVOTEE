@@ -111,7 +111,9 @@ async function ensureSchema() {
         await db.query(`ALTER TABLE \`${t}\` ADD ${unique}INDEX \`${i}\` (\`${c}\`)`);
         done.push(`+ ${unique ? 'unique ' : ''}index ${i}`);
     }
-    const [[maxVoter]] = await db.query("SELECT COALESCE(MAX(CAST(SUBSTRING(voter_id, 2) AS UNSIGNED)), 0) AS max_id FROM voters WHERE voter_id REGEXP '^V[0-9]+
+    const [[maxVoter]] = await db.query("SELECT COALESCE(MAX(CAST(SUBSTRING(voter_id, 2) AS UNSIGNED)), 0) AS max_id FROM voters WHERE voter_id REGEXP '^V[0-9]+$'");
+    const nextValue = Number(maxVoter.max_id || 0) + 1;
+    await db.query("INSERT INTO voter_id_counters (sequence_name, next_value) VALUES ('voter', ?) ON DUPLICATE KEY UPDATE next_value = GREATEST(next_value, VALUES(next_value))", [nextValue]);
     if (!(await hasFk('candidates', 'fk_candidates_election'))) {
         await db.query("ALTER TABLE candidates ADD CONSTRAINT fk_candidates_election FOREIGN KEY (election_id) REFERENCES elections(election_id) ON DELETE SET NULL");
         done.push('+ fk candidates.election_id');

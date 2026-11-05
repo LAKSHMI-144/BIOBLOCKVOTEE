@@ -10,7 +10,7 @@ const liveness = require('../services/liveness');
 const requireAdmin = require('../middleware/requireAdmin');
 const rateLimit = require('../middleware/rateLimit');
 
-const VOTER_ID_RE = /^V[0-9]{3,}$/;
+const VOTER_ID_RE = /^[A-Z0-9-]{4,20}$/;
 const NAME_RE = /^\p{L}[\p{L}\p{M}\s.'-]{1,98}$/u;
 const GENDERS = ['Male', 'Female', 'Other'];
 const MIN_AGE = 18, MAX_AGE = 120;
@@ -36,7 +36,7 @@ function validateDetails(body) {
     const ageRaw = typeof body.age === 'string' ? body.age.trim() : body.age;
     const age = ageRaw === '' || ageRaw === null || ageRaw === undefined ? NaN : Number(ageRaw);
     const e = {};
-    if (!/^\\d{12}$/.test(demo_identity_number)) e.demo_identity_number = { code: 'DEMO_ID_INVALID', message: 'Enter a valid 12-digit synthetic demo identity number.' };
+    if (!/^\d{12}$/.test(demo_identity_number)) e.demo_identity_number = { code: 'DEMO_ID_INVALID', message: 'Enter a valid 12-digit synthetic demo identity number.' };
     if (!district || district.length > 100) e.district = { code: 'DISTRICT_REQUIRED', message: 'Enter your district.' };
     if (!name) e.name = { code: 'NAME_REQUIRED', message: 'Please enter your full name.' };
     else if (name.length < 2 || name.length > 100 || !NAME_RE.test(name) || (name.match(/\p{L}/gu) || []).length < 2)

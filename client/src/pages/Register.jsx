@@ -84,7 +84,7 @@ export default function Register() {
     e?.preventDefault()
     const local = validate(form)
     if (Object.keys(local).length) {
-      setErrors(Object.fromEntries(Object.entries(local).map(([f, c]) => [f, t(`err.${c}`)])))
+      setErrors(Object.fromEntries(Object.entries(local).map(([f, c]) => [f, c === 'DEMO_ID_INVALID' ? 'Enter exactly 12 digits for the synthetic demo identity number.' : c === 'DISTRICT_REQUIRED' ? 'Enter your district.' : t(`err.${c}`)])))
       return say('error', t('reg.fixErrors'))
     }
     setErrors({})
@@ -258,7 +258,7 @@ export default function Register() {
                   onChange={e => setOtp(e.target.value.replace(/\D/g, ''))} placeholder="______" />
                 <p className="hint" style={{ textAlign: 'left', fontSize: 13, marginTop: 8 }}>
                   {cooldown > 0 ? t('idv.resendIn', { s: cooldown }) : <button type="button" className="link-btn" onClick={sendOtp} disabled={!!loading}>{t('idv.resend')}</button>}
-                  {' · '}<button type="button" className="link-btn" onClick={() => { setOtpSent(null); setOtp(''); say(null) }} disabled={!!loading}>{t('idv.change')}</button>
+                  {' · '}<button type="button" className="link-btn" onClick={() => { setOtpSent(null); setOtp(''); say(null) }} disabled={!!loading}>Restart demo OTP</button>
                 </p>
               </>
             )}

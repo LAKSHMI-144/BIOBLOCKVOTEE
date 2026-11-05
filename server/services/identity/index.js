@@ -5,8 +5,8 @@ const crypto = require('crypto');
 const db = require('../../config/db');
 
 const OTP_TTL_MS = 5 * 60 * 1000, COOLDOWN_MS = 30 * 1000, MAX_ATTEMPTS = 5, MAX_SENDS = 5;
-const PHONE_RE = /^[6-9]\\d{9}$/;
-const DEMO_CONTACT_RE = /^DEMO-V\\d{3,}$/;
+const PHONE_RE = /^[6-9]\d{9}$/;
+const DEMO_CONTACT_RE = /^DEMO-V\d{3,}$/;
 
 const mode = () => (process.env.IDENTITY_MODE || 'required').toLowerCase();   // required | off
 const providerName = () => (process.env.IDENTITY_PROVIDER || 'mock').toLowerCase();
