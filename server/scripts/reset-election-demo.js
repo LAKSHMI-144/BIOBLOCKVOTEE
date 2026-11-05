@@ -68,8 +68,11 @@ async function main() {
     const latestElection = electionRows[0];
     if (!latestElection) throw new Error('No election exists after schema bootstrap.');
 
-    // Activate all ballot choices and make their state/UT scopes visible in the admin party picker.
+    // Rebuild party scopes from the four-option-per-state demo map. This prevents stale global AAP/BSP
+    // links or the non-party Independent entry from creating extra options in each constituency.
+    await db.query('DELETE FROM party_states');
     await db.query("UPDATE parties SET status = 'ACTIVE' WHERE abbreviation IN (?)", [neededAbbrs]);
+    await db.query("UPDATE parties SET status = 'INACTIVE' WHERE abbreviation = 'IND'");
     for (const [stateCode, abbreviations] of Object.entries(DEMO_PARTIES_BY_STATE)) {
         const [stateRows] = await db.query('SELECT state_id FROM states WHERE code = ?', [stateCode]);
         const state = stateRows[0];
