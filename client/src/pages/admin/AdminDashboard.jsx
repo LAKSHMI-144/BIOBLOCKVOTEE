@@ -124,6 +124,32 @@ export default function AdminDashboard() {
                 <BarChart items={voteRows} emptyTitle="No voting data available yet" emptyText="Votes per candidate appear here after votes are recorded." />
               </div>
             </section>
+            <section className="bb-panel">
+              <div className="bb-panel-header"><span>Lok Sabha seat tally</span><small>{d.parliamentary.seats_counted} / {d.scope.parliamentary_constituencies} seats counted</small></div>
+              {d.parliamentary.seats_counted === 0 ? (
+                <div className="bb-empty-panel">
+                  <h3>No constituency results yet</h3>
+                  <p>Each seat is counted after at least one vote is recorded in that constituency.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="bb-dashboard-subtitle" style={{ marginBottom: 12 }}>
+                    {d.parliamentary.majority_party
+                      ? `${d.parliamentary.majority_party.party_name} has reached the simulated majority mark.`
+                      : `${d.parliamentary.leading_party.party_name} is currently leading by seats; no party has reached a majority yet.`}
+                  </p>
+                  <div className="bb-table-shell">
+                    <table className="bb-table">
+                      <thead><tr><th>Party</th><th>Seats won</th></tr></thead>
+                      <tbody>{d.parliamentary.seats_by_party.map(p => (
+                        <tr key={p.party_id}><td><strong>{p.party_name}</strong> <small>({p.party_abbr})</small></td><td>{p.seats_won}</td></tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+              <p className="bb-sub" style={{ marginTop: 12 }}>Majority mark: {d.parliamentary.majority_mark} of {d.scope.parliamentary_constituencies} seats. This is a PM-formation simulation, not a direct PM ballot.</p>
+            </section>
           </div>
         </>
       )}
