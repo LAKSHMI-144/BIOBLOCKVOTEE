@@ -389,7 +389,7 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
 
 router.get('/all', requireAdmin, async (req, res) => {
     try {
-        const [rows] = await db.query(`SELECT v.voter_id, v.name, v.age, v.has_voted, v.is_eligible, v.face_encoding IS NOT NULL AS face_registered,
+        const [rows] = await db.query(`SELECT v.voter_id, v.name, v.age, v.gender, v.district, v.demo_identity_masked, v.has_voted, v.is_eligible, v.face_encoding IS NOT NULL AS face_registered,
                 COALESCE(i.status, 'NOT_STARTED') AS identity_status, v.registered_at,
                 v.state_id, v.constituency_id, s.name AS state_name, k.name AS constituency_name
             FROM voters v LEFT JOIN identity_verifications i ON i.voter_id = v.voter_id

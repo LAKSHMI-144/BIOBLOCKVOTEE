@@ -178,7 +178,7 @@ export default function Register() {
     if (!r) return
     setImages([])                                   // captures are never kept after a try
     if (r.error) { setLivenessToken(''); setLivenessFrame(''); if (r.error.code === 'REG_SESSION') setStep(1); return }
-    regToken.clear(); say(null); setStep(4)
+    regToken.clear(); setLivenessToken(''); setLivenessFrame(''); say(null); setStep(4)
   }
 
   const field = (f, label, type = 'text', extra = {}) => (
@@ -289,7 +289,7 @@ export default function Register() {
             <p className="hint">{t('face.progress', { n: images.length, min: MIN_IMAGES, max: MAX_IMAGES })}</p>
             <div className="btn-row">
               {!livenessToken && <button type="button" className="btn primary" onClick={runRegistrationLiveness} disabled={!!loading || !cameraReady}>Start live-face check</button>}
-              <button type="button" className="btn danger" onClick={capture} disabled={!!loading || !cameraReady || images.length >= MAX_IMAGES}>📸 {t('face.capture')}</button>
+              <button type="button" className="btn danger" onClick={capture} disabled={!!loading || !cameraReady || !livenessToken || images.length >= MAX_IMAGES}>📸 {t('face.capture')}</button>
               <button type="button" className="btn secondary" onClick={() => { setImages([]); setFaceStatus(''); say(null) }} disabled={!!loading || images.length === 0}>↺ {t('face.retake')}</button>
               <button type="button" className="btn primary" onClick={submitFace} disabled={!!loading || images.length < MIN_IMAGES}>{loading === t('reg.processing') ? t('reg.processing') : t('face.register')}</button>
               <button type="button" className="btn secondary" disabled={!!loading} onClick={() => { say(null); setStep(identityOn ? 2 : 1) }}>{t('common.back')}</button>
