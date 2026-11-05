@@ -11,3 +11,8 @@ export function IconLink(props) { return <Svg {...props}><><path d="M10 14a4 4 0
 export function IconAlert(props) { return <Svg {...props}><><path d="M12 3.6 2.8 19.6h18.4L12 3.6Z" /><path d="M12 10v4.2M12 17.2v.1" /></></Svg> }
 export function IconClock(props) { return <Svg {...props}><><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></></Svg> }
 export function IconRefresh(props) { return <Svg {...props}><><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 5v6h-6" /></></Svg> }
+export function IconFace(props) { return <Svg {...props}><><circle cx="12" cy="8.5" r="3.5" /><path d="M5 20c.5-3.5 3.2-5.5 7-5.5s6.5 2 7 5.5" /><path d="M9.8 9h.1M14.1 9h.1M10 11.2c1.2.9 2.8.9 4 0" /></></Svg> }
+export function IconKey(props) { return <Svg {...props}><><circle cx="8" cy="15" r="4" /><path d="m11 12 8-8M15 8l3 3M17 6l3 3" /></></Svg> }
+export function IconLock(props) { return <Svg {...props}><><rect x="4.5" y="10" width="15" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></></Svg> }
+export function IconDatabase(props) { return <Svg {...props}><><ellipse cx="12" cy="5.5" rx="8" ry="3" /><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></></Svg> }
+export function IconClipboard(props) { return <Svg {...props}><><rect x="5" y="4.5" width="14" height="17" rx="2" /><path d="M9 4.5v-1h6v1M8.5 10h7M8.5 14h7M8.5 18h4" /></></Svg> }

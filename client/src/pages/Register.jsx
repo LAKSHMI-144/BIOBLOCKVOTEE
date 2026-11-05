@@ -4,6 +4,7 @@ import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
 import PublicHeader from '../components/PublicHeader'
 import { useT } from '../i18n/i18nContext'
+import { displayConstituencyName } from '../lib/adminFormat'
 import { API, apiError, regToken, bearer } from '../api'
 
 const MIN_IMAGES = 3, MAX_IMAGES = 5
@@ -187,7 +188,7 @@ export default function Register() {
               <label htmlFor="constituency_id">{t('reg.constituency')} *</label>
               <select id="constituency_id" className={`input${errors.constituency_id ? ' invalid' : ''}`} value={form.constituency_id} disabled={!!loading || !form.state_id} onChange={e => { setForm({ ...form, constituency_id: e.target.value }); clearErr('constituency_id') }}>
                 <option value="">{t('reg.constSelect')}</option>
-                {consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{c.name}</option>)}
+                {consts.map(c => <option key={c.constituency_id} value={c.constituency_id}>{displayConstituencyName(c.name)}</option>)}
               </select>
               {errors.constituency_id && <p className="field-err" role="alert">{errors.constituency_id}</p>}
               {geoErr && <p className="field-err" role="alert">{t('reg.geoError')}</p>}

@@ -1,6 +1,6 @@
 // Short-lived signed tokens (HMAC-SHA256) for non-admin sessions:
-//   purpose "reg"   – proves who started a voter registration (so only they can finish it)
-//   purpose "voter" – proves a voter passed face verification (binds /votes/cast to that voter)
+//   purpose "reg"   ? proves who started a voter registration (so only they can finish it)
+//   purpose "voter" ? proves a voter passed face verification (binds /votes/cast to that voter)
 // Secret: SESSION_SECRET from server/.env. If unset a random per-boot secret is used, which
 // is safe but invalidates all sessions whenever the server restarts.
 const crypto = require('crypto');
@@ -24,7 +24,7 @@ const verify = (purpose, token) => {
         return d.p === purpose && d.exp > Date.now() ? d.v : null;
     } catch { return null; }
 };
-const bearer = req => (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1];
+const bearer = req => /^Bearer\s+(.+)$/i.exec(req.get('Authorization') || '')?.[1] || null;
 
 module.exports = { sign, verify, bearer, usingEphemeral,
     signReg: id => sign('reg', id, 60 * 60 * 1000),

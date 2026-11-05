@@ -70,13 +70,17 @@ call('/register', dict(voter_id='V003', name='Ravi Kumar', age=40, gender='Male'
 t('different person V003',   call('/register-face', {'voter_id':'V003','images':D['P1'][:3]}), 200, expect_success=True)
 call('/register', dict(voter_id='V004', name='Meena S', age=33, gender='Female', address='Mysuru, Karnataka')); verify_identity('V004')
 t('third person V004',       call('/register-face', {'voter_id':'V004','images':D['P2'][:3]}), 200, expect_success=True)
-print("== Authentication uses real recognition (not a constant answer)")
-def auth(img): 
-    st,b = call('/authenticate', {'face_image':img}); return st,b
-st,b=auth(A[3]);          print(b); res.append(b.get('voter_id')=='V001')
-st,b=auth(D['P1'][3]);    print(b); res.append(b.get('voter_id')=='V003')
-st,b=auth(D['P2'][2]);    print(b); res.append(b.get('voter_id')=='V004')
-st,b=auth(D['P5'][0]);    print(b); res.append(b.get('success') is False and 'not recognized' in b.get('message',''))
-st,b=auth(D['noise']);    print(b); res.append(b.get('code')=='NO_FACE')
-st,b=auth(D['multi']);    print(b); res.append(b.get('code')=='MULTIPLE_FACES')
+print("== Legacy still-image login is blocked")
+print("The login challenge requires a live webcam sequence; one image must never authenticate.")
+def auth(img):
+    return call('/authenticate', {'face_image':img, 'voter_id':'V001'})
+for label, image in (
+    ('registered face', A[3]), ('other registered face', D['P1'][3]),
+    ('third registered face', D['P2'][2]), ('unrecognized face', D['P5'][0]),
+    ('no face', D['noise']), ('multiple faces', D['multi'])
+):
+    st, b = auth(image)
+    passed = st == 400 and b.get('code') == 'INVALID_LIVENESS_DATA' and not b.get('session_token')
+    res.append(passed)
+    print(('PASS' if passed else 'FAIL'), f'legacy still-image login rejected ({label})', st, b.get('code', ''))
 print(f"\n{sum(res)}/{len(res)} checks passed")

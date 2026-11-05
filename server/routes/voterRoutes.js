@@ -5,6 +5,7 @@ const ai = require('../config/ai');
 const audit = require('../config/audit');
 const tokens = require('../config/tokens');
 const identity = require('../services/identity');
+const liveness = require('../services/liveness');
 const requireAdmin = require('../middleware/requireAdmin');
 const rateLimit = require('../middleware/rateLimit');
 
@@ -158,31 +159,184 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
     }
 });
 
-// Face login. Optional voter_id (what the voter typed on the login page) is enforced HERE:
-// the face must belong to that Voter ID. On success a short-lived session token is issued;
-// /votes/cast accepts only that token, never a voter_id from the browser.
-router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), async (req, res) => {
-    const { face_image, voter_id: claimed } = req.body || {};
+router.post('/liveness-challenge', rateLimit('liveness-challenge', 20, 10 * 60 * 1000), async (req, res) => {
+    const voterId = String(req.body?.voter_id ?? '').trim().toUpperCase();
+    if (!VOTER_ID_RE.test(voterId))
+        return fail(res, 400, 'Enter a valid Voter ID.', { code: 'ID_FORMAT' });
     try {
-        const aiRes = await ai.post('/authenticate', { image: face_image });
-        const typed = VOTER_ID_RE.test(String(claimed ?? '').trim().toUpperCase()) ? String(claimed).trim().toUpperCase() : null;   // unverified: only logged when well-formed
-        if (aiRes.status >= 500 || aiRes.status === 403) { await audit(typed, 'AUTH_FAILED:AI_ERROR'); return res.json({ success: false, code: 'AI_ERROR', message: "Authentication service error. Please try again." }); }
-        if (!aiRes.data.success) { await audit(typed, `AUTH_FAILED:${aiRes.data.code || 'NOT_RECOGNIZED'}`); return res.json(aiRes.data); }
+        const [rows] = await db.query(
+            'SELECT is_eligible, has_voted, face_encoding IS NOT NULL AS has_face FROM voters WHERE voter_id = ?',
+            [voterId]
+        );
+        if (!rows.length || !rows[0].has_face)
+            return fail(res, 404, 'Voter ID or face registration was not found.', { code: 'VOTER_NOT_FOUND' });
+        if (!rows[0].is_eligible)
+            return fail(res, 403, 'This voter is not eligible to vote.', { code: 'NOT_ELIGIBLE' });
+        if (rows[0].has_voted)
+            return fail(res, 409, 'This voter has already voted.', { code: 'ALREADY_VOTED' });
+
+        await db.query(
+            'DELETE FROM liveness_challenges WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)'
+        );
+        const challenge = liveness.createChallenge();
+        await db.query(
+            'INSERT INTO liveness_challenges (token_hash, voter_id, actions, expires_at) VALUES (?, ?, ?, ?)',
+            [liveness.hashChallengeToken(challenge.token), voterId, JSON.stringify(challenge.actions), new Date(Date.now() + 90 * 1000)]
+        );
+        res.set('Cache-Control', 'no-store');
+        res.json({
+            success: true,
+            challenge_token: challenge.token,
+            actions: challenge.actions,
+            frame_count: challenge.frame_count,
+            expires_in: 90
+        });
+    } catch (e) {
+        console.error('liveness challenge error:', e.message);
+        fail(res, 503, 'Could not start camera verification. Please try again.', { code: 'LIVENESS_SERVICE_ERROR' });
+    }
+});
+
+router.post('/check-liveness', rateLimit('check-liveness', 20, 10 * 60 * 1000), async (req, res) => {
+    const { challenge_token: challengeToken, frames, voter_id: claimed } = req.body || {};
+    const typed = String(claimed ?? '').trim().toUpperCase();
+    const tokenHash = liveness.hashChallengeToken(challengeToken);
+    if (!VOTER_ID_RE.test(typed))
+        return fail(res, 400, 'Enter a valid Voter ID.', { code: 'ID_FORMAT' });
+    if (!tokenHash || !liveness.validateFrames(frames))
+        return fail(res, 400, 'The camera challenge data is invalid. Start again.', { code: 'INVALID_LIVENESS_DATA' });
+
+    try {
+        const actions = await liveness.consumeChallenge(db, tokenHash, typed);
+        if (!actions) {
+            await audit(typed, 'AUTH_FAILED:LIVENESS_CHALLENGE_INVALID');
+            return fail(res, 401, 'The camera challenge expired or was already used. Start again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
+        }
+
+        const liveRes = await ai.post('/liveness-check', { frames, actions }, { timeout: 90000 });
+        if (liveRes.status >= 500 || liveRes.status === 403) {
+            await audit(typed, 'AUTH_FAILED:LIVENESS_SERVICE_ERROR');
+            return fail(res, 503, 'Liveness verification is temporarily unavailable.', { code: 'LIVENESS_SERVICE_ERROR' });
+        }
+        const identityFrameIndex = liveRes.data?.identity_frame_index;
+        if (
+            !liveRes.data?.success
+            || !liveness.isIdentityFrameIndex(identityFrameIndex, frames.length)
+        ) {
+            await audit(typed, `AUTH_FAILED:${liveRes.data?.code || 'LIVENESS_FAILED'}`);
+            return res.status(403).json({
+                success: false,
+                code: liveRes.data?.code || 'LIVENESS_FAILED',
+                message: liveRes.data?.message || 'The camera challenge was not passed.'
+            });
+        }
+        const verificationToken = liveness.createVerificationToken();
+        const saved = await liveness.storeLivenessPass(
+            db,
+            tokenHash,
+            typed,
+            liveness.hashChallengeToken(verificationToken),
+            liveness.hashFrame(frames[identityFrameIndex])
+        );
+        if (!saved) {
+            await audit(typed, 'AUTH_FAILED:LIVENESS_PROOF_STORE_FAILED');
+            return fail(res, 401, 'The camera verification expired. Start again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
+        }
+        res.set('Cache-Control', 'no-store');
+        return res.json({
+            success: true,
+            liveness_passed: true,
+            liveness_token: verificationToken,
+            identity_frame_index: identityFrameIndex
+        });
+    } catch (e) {
+        console.error('liveness verification error:', e.message);
+        await audit(typed, 'AUTH_FAILED:LIVENESS_UNAVAILABLE');
+        return fail(res, 503, 'Liveness verification is unavailable. Check the camera service and try again.', {
+            code: 'LIVENESS_SERVICE_ERROR'
+        });
+    }
+});
+
+// The one-use liveness proof is bound to the exact frontal frame from the challenge before ArcFace can issue a voter session.
+router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), async (req, res) => {
+    const { liveness_token: livenessToken, image, voter_id: claimed } = req.body || {};
+    const typed = String(claimed ?? '').trim().toUpperCase();
+    const verificationHash = liveness.hashChallengeToken(livenessToken);
+    if (!VOTER_ID_RE.test(typed))
+        return fail(res, 400, 'Enter a valid Voter ID.', { code: 'ID_FORMAT' });
+    if (!verificationHash || !validImage(image))
+        return fail(res, 400, 'The face verification data is invalid. Start again.', { code: 'INVALID_LIVENESS_DATA' });
+
+    let livenessPassed = false;
+    try {
+        livenessPassed = await liveness.consumeLivenessPass(db, verificationHash, typed, image);
+        if (!livenessPassed) {
+            await audit(typed, 'AUTH_FAILED:LIVENESS_PROOF_INVALID');
+            return fail(res, 401, 'Face verification expired or the camera frame changed. Start again.', {
+                code: 'LIVENESS_CHALLENGE_INVALID'
+            });
+        }
+
+        const [voterRows] = await db.query(
+            'SELECT is_eligible, has_voted, face_encoding IS NOT NULL AS has_face FROM voters WHERE voter_id = ?',
+            [typed]
+        );
+        if (!voterRows.length || !voterRows[0].has_face)
+            return fail(res, 404, 'Voter ID or face registration was not found.', {
+                code: 'VOTER_NOT_FOUND', liveness_passed: true
+            });
+        if (!voterRows[0].is_eligible)
+            return fail(res, 403, 'This voter is not eligible to vote.', {
+                code: 'NOT_ELIGIBLE', liveness_passed: true
+            });
+        if (voterRows[0].has_voted)
+            return fail(res, 409, 'This voter has already voted.', {
+                code: 'ALREADY_VOTED', liveness_passed: true
+            });
+
+        const aiRes = await ai.post('/authenticate', { image });
+        if (aiRes.status >= 500 || aiRes.status === 403) {
+            await audit(typed, 'AUTH_FAILED:AI_ERROR');
+            return fail(res, 503, 'Authentication service error. Please try again.', {
+                code: 'AI_ERROR', liveness_passed: true
+            });
+        }
+        if (!aiRes.data.success) {
+            await audit(typed, `AUTH_FAILED:${aiRes.data.code || 'NOT_RECOGNIZED'}`);
+            return res.status(403).json({
+                ...aiRes.data,
+                code: aiRes.data.code || 'IDENTITY_FAILED',
+                liveness_passed: true
+            });
+        }
         const { voter_id, voter_name, has_voted } = aiRes.data;
-        if (claimed && String(claimed).trim().toUpperCase() !== String(voter_id).toUpperCase()) {
+        if (typed !== String(voter_id).toUpperCase()) {
             await audit(voter_id, 'AUTH_ID_MISMATCH');
-            return res.status(403).json({ success: false, code: 'ID_MISMATCH', message: 'The verified face does not match the Voter ID you entered.' });
+            return res.status(403).json({
+                success: false, code: 'ID_MISMATCH', liveness_passed: true,
+                message: 'The verified face does not match the Voter ID you entered.'
+            });
         }
         if (has_voted) {
             await audit(voter_id, 'DUPLICATE_ATTEMPT');
-            return res.json({ success: false, already_voted: true, code: 'ALREADY_VOTED', message: `${voter_name} has already voted!` });
+            return res.status(409).json({
+                success: false, already_voted: true, code: 'ALREADY_VOTED',
+                liveness_passed: true, message: `${voter_name} has already voted!`
+            });
         }
+        if (!liveness.isVerificationComplete(livenessPassed, aiRes.data.success))
+            return fail(res, 403, 'Both camera liveness and face identity verification are required.', { code: 'VERIFICATION_REQUIRED' });
         await audit(voter_id, 'AUTHENTICATED');
-        res.json({ ...aiRes.data, session_token: tokens.signVoter(voter_id) });
+        res.set('Cache-Control', 'no-store');
+        res.json({ ...aiRes.data, liveness_passed: true, session_token: tokens.signVoter(voter_id) });
     } catch (e) {
         console.error('authenticate error:', e.message);
-        await audit(null, 'AUTH_FAILED:AI_UNAVAILABLE');
-        res.json({ success: false, message: "Authentication service is unavailable. Please try again." });
+        await audit(typed, 'AUTH_FAILED:AI_UNAVAILABLE');
+        fail(res, 503, 'Authentication service is unavailable. Please try again.', {
+            code: 'AI_ERROR',
+            liveness_passed: livenessPassed
+        });
     }
 });
 

@@ -15,7 +15,7 @@ export default function Blockchain() {
         <div>
           <div className="bb-page-kicker">Security</div>
           <h1>Blockchain</h1>
-          <p className="bb-page-subtitle">Blocks are created automatically by the application; this page is for verification.</p>
+          <p className="bb-page-subtitle">Blocks are created automatically. Re-verification and refresh only read the latest chain state.</p>
         </div>
         <button type="button" className="bb-button" onClick={reload} disabled={loading}>{loading ? 'Verifying…' : 'Re-verify chain'}</button>
       </header>
@@ -36,8 +36,8 @@ export default function Blockchain() {
               <div className="s"><code>{short(latest?.hash)}</code></div>
             </div>
           </div>
-          <p className="note">Chain is held in memory (resets when the AI service restarts). Voter IDs appear only as SHA-256 hashes.</p>
-          <div className="chain" role="list" aria-label="Blockchain blocks">
+          <p className="note">This prototype stores its chain in AI-service memory, so a service restart resets its history. Refresh cannot restore prior blocks. Voter IDs appear only as SHA-256 hashes.</p>
+          {chain.length === 0 ? <div className="bb-empty-panel"><div className="bb-empty-panel-icon">◌</div><h3>No chain data returned</h3><p>The verification endpoint returned no blocks. Refresh to check again.</p></div> : <div className="chain" role="list" aria-label="Blockchain blocks">
             {chain.map((b, i) => (
               <div key={b.index} style={{ display: 'flex' }} role="listitem">
                 {i > 0 && <div className="link" aria-hidden="true" />}
@@ -51,7 +51,7 @@ export default function Blockchain() {
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
         </>
       )}
     </div>

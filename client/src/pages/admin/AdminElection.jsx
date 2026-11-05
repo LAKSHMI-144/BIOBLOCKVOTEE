@@ -46,7 +46,7 @@ export default function AdminElection() {
           </div>
           <section className="bb-section-card">
             <div className="bb-section-top"><div><div className="bb-section-kicker">Quick controls</div><h2>Open or close voting</h2></div></div>
-            <p className="bb-sub">“Open now” schedules the election to run for two hours from this moment (useful for demonstrations). “Close” ends it immediately; candidates are then locked.</p>
+            <p className="bb-sub">“Open now” schedules the election to run for two hours from this moment. “Close” ends it immediately; candidates are then locked.</p>
             <div className="bb-actions" style={{ marginTop: 12 }}>
               <button type="button" className="bb-button" disabled={e.status === 'ENDED'} onClick={() => setConfirm('open')}>Open voting for 2 hours</button>
               <button type="button" className="bb-button danger" disabled={e.status === 'ENDED'} onClick={() => setConfirm('close')}>Close election</button>

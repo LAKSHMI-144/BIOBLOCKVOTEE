@@ -34,7 +34,7 @@ export default function AdminParties() {
         </div>
         <button type="button" className="bb-button primary" onClick={() => setDialog({ kind: 'form' })}>+ Add Party</button>
       </header>
-      <p className="note">The seeded parties are an illustrative starting set, not an exhaustive or officially verified list. Add or edit parties as needed.</p>
+      <p className="note">Party availability is based on configured state coverage and party status.</p>
       {flash && <div className={`bb-flash ${flash.type}`} role="status">{flash.text}<button type="button" className="bb-flash-x" aria-label="Dismiss" onClick={() => setFlash(null)}>×</button></div>}
 
       <section className="bb-section-card">

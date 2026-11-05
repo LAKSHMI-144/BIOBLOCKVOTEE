@@ -1,7 +1,8 @@
 // Fails when an admin page uses a bb-* class that no stylesheet defines (the cause of the unstyled dashboard).
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-const src = new URL('./src/', import.meta.url).pathname
+import { fileURLToPath } from 'node:url'
+const src = fileURLToPath(new URL('./src/', import.meta.url))
 const css = ['App.css', 'index.css', 'theme.css', 'admin.css'].map(f => readFileSync(join(src, f), 'utf8')).join('\n')
 const defined = new Set([...css.matchAll(/\.([A-Za-z_][\w-]*)/g)].map(m => m[1]))
 const files = [...readdirSync(join(src, 'pages/admin')).map(f => `pages/admin/${f}`), 'pages/Results.jsx', 'pages/Blockchain.jsx', 'components/AdminLayout.jsx']

@@ -40,13 +40,22 @@ class Blockchain:
         }
 
     def is_valid(self):
-        for i in range(1, len(self.chain)):
-            curr = self.chain[i]
-            prev = self.chain[i - 1]
-            if curr.hash != curr.calculate_hash():
+        if not self.chain or not isinstance(self.chain[0], Block):
+            return False
+        genesis = self.chain[0]
+        try:
+            if (genesis.index != 0 or genesis.voter_hash != "0" or genesis.candidate != "GENESIS_BLOCK"
+                    or genesis.prev_hash != "0" or genesis.hash != genesis.calculate_hash()):
                 return False
-            if curr.prev_hash != prev.hash:
-                return False
+            for i in range(1, len(self.chain)):
+                curr = self.chain[i]
+                prev = self.chain[i - 1]
+                if not isinstance(curr, Block) or curr.index != i:
+                    return False
+                if curr.prev_hash != prev.hash or curr.hash != curr.calculate_hash():
+                    return False
+        except (AttributeError, TypeError, ValueError):
+            return False
         return True
 
     def get_chain_data(self):

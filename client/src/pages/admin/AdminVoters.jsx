@@ -1,6 +1,7 @@
 import { adminApi } from '../../api'
 import useLoad from '../../hooks/useLoad'
 import State from '../../components/State'
+import { displayConstituencyName } from '../../lib/adminFormat'
 
 const badge = (value, success = 'Verified', failure = 'Pending') => (
   <span className={`bb-badge ${value ? 'success' : 'muted'}`}>{value ? success : failure}</span>
@@ -81,7 +82,7 @@ export default function AdminVoters() {
                         <td><strong>{v.voter_id}</strong></td>
                         <td>{v.name || 'Unknown voter'}</td>
                         <td>{v.state_name || '—'}</td>
-                        <td>{v.constituency_name || <span className="bb-badge warn">Not set</span>}</td>
+                        <td>{displayConstituencyName(v.constituency_name) || <span className="bb-badge warn">Not set</span>}</td>
                         <td>{badge(Boolean(v.is_eligible), 'Eligible', 'Not eligible')}</td>
                         <td>{badge(Boolean(v.face_registered), 'Verified', 'Pending')}</td>
                         <td>{badge(Boolean(v.has_voted), 'Voted', 'Not voted')}</td>
