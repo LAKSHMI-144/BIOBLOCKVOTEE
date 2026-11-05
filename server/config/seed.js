@@ -106,6 +106,21 @@ async function seed() {
         "UPDATE parties SET status = 'ACTIVE' WHERE abbreviation IN ('BJP','INC','AAP','BSP')"
     );
 
+    // Retire old assembly/demo and stale PC labels; registration exposes only this national PC roster.
+    for (const [code, names] of Object.entries(LOK_SABHA_CONSTITUENCIES)) {
+        const stateId = byCode[code];
+        if (!stateId) throw new Error('Missing state / UT master row for code ' + code);
+        const placeholders = names.map(() => '?').join(',');
+        await db.query(
+            `UPDATE constituencies SET is_active = FALSE
+             WHERE state_id = ? AND kind = 'PARLIAMENTARY' AND name NOT IN (${placeholders})`,
+            [stateId, ...names]
+        );
+        await db.query(
+            "UPDATE constituencies SET is_active = FALSE WHERE state_id = ? AND kind <> 'PARLIAMENTARY'",
+            [stateId]
+        );
+    }
     let constituencyCount = 0;
     for (const [code, names] of Object.entries(LOK_SABHA_CONSTITUENCIES)) {
         const stateId = byCode[code];
