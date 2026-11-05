@@ -17,7 +17,7 @@ const UNION_TERRITORIES = [
     ['DL', 'Delhi'], ['JK', 'Jammu and Kashmir'], ['LA', 'Ladakh'], ['LD', 'Lakshadweep'], ['PY', 'Puducherry']
 ];
 
-// [name, abbreviation, all_states, [state codes], notes]. AAP and BSP are also enabled as demo ballot options nationwide.
+// [name, abbreviation, all_states, [state codes], notes]. Demo constituency options are configured by state in reset-election-demo.js.
 const PARTIES = [
     ['Bharatiya Janata Party', 'BJP', true, [], null],
     ['Indian National Congress', 'INC', true, [], null],
@@ -89,38 +89,6 @@ async function seed() {
     }
     if (partyCount) done.push('+' + partyCount + ' illustrative party master records');
 
-    // The academic demo ballot intentionally offers four selectable party slates in every PC.
-    // This is not a statement that these parties officially nominate candidates in every constituency.
-    const [demoParties] = await db.query(
-        "SELECT party_id, abbreviation FROM parties WHERE abbreviation IN ('AAP','BSP')"
-    );
-    for (const party of demoParties) {
-        for (const stateId of Object.values(byCode)) {
-            await db.query(
-                'INSERT IGNORE INTO party_states (party_id, state_id) VALUES (?,?)',
-                [party.party_id, stateId]
-            );
-        }
-    }
-    await db.query(
-        "UPDATE parties SET status = 'ACTIVE' WHERE abbreviation IN ('BJP','INC','AAP','BSP')"
-    );
-
-    // Retire old assembly/demo and stale PC labels; registration exposes only this national PC roster.
-    for (const [code, names] of Object.entries(LOK_SABHA_CONSTITUENCIES)) {
-        const stateId = byCode[code];
-        if (!stateId) throw new Error('Missing state / UT master row for code ' + code);
-        const placeholders = names.map(() => '?').join(',');
-        await db.query(
-            `UPDATE constituencies SET is_active = FALSE
-             WHERE state_id = ? AND kind = 'PARLIAMENTARY' AND name NOT IN (${placeholders})`,
-            [stateId, ...names]
-        );
-        await db.query(
-            "UPDATE constituencies SET is_active = FALSE WHERE state_id = ? AND kind <> 'PARLIAMENTARY'",
-            [stateId]
-        );
-    }
     let constituencyCount = 0;
     for (const [code, names] of Object.entries(LOK_SABHA_CONSTITUENCIES)) {
         const stateId = byCode[code];
