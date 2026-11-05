@@ -5,7 +5,8 @@ const crypto = require('crypto');
 const db = require('../../config/db');
 
 const OTP_TTL_MS = 5 * 60 * 1000, COOLDOWN_MS = 30 * 1000, MAX_ATTEMPTS = 5, MAX_SENDS = 5;
-const PHONE_RE = /^[6-9]\d{9}$/;
+const PHONE_RE = /^[6-9]\\d{9}$/;
+const DEMO_CONTACT_RE = /^DEMO-V\\d{3,}$/;
 
 const mode = () => (process.env.IDENTITY_MODE || 'required').toLowerCase();   // required | off
 const providerName = () => (process.env.IDENTITY_PROVIDER || 'mock').toLowerCase();
@@ -19,7 +20,8 @@ function provider() {
     throw Object.assign(new Error(`Unknown IDENTITY_PROVIDER "${p}"`), { status: 503, code: 'IDENTITY_UNAVAILABLE' });
 }
 const hashContact = c => crypto.createHash('sha256').update(`bbv-contact:${c}`).digest('hex');
-const mask = c => `******${c.slice(-4)}`;
+const isValidContact = c => PHONE_RE.test(String(c || '')) || DEMO_CONTACT_RE.test(String(c || ''));
+const mask = c => DEMO_CONTACT_RE.test(String(c || '')) ? 'College demo OTP' : `******${c.slice(-4)}`;
 const err = (status, code, message, extra = {}) => Object.assign(new Error(message), { status, code, ...extra });
 
 const row = async voter_id => (await db.query("SELECT * FROM identity_verifications WHERE voter_id = ?", [voter_id]))[0][0];
@@ -30,7 +32,7 @@ module.exports = {
         return { mode: mode(), provider: providerName(), development: !!p?.development, label: p?.label || null, otp_length: 6, otp_ttl_seconds: OTP_TTL_MS / 1000, resend_cooldown_seconds: COOLDOWN_MS / 1000 }; },
 
     async startVerification(voter_id, contact) {
-        if (!PHONE_RE.test(String(contact || ''))) throw err(400, 'PHONE_INVALID', 'Enter a valid 10-digit mobile number.');
+        if (!isValidContact(contact)) throw err(400, 'DEMO_CONTACT_INVALID', 'The demo registration contact is invalid. Start registration again.');
         provider();
         await db.query(
             `INSERT INTO identity_verifications (voter_id, provider, status, contact_hash, contact_masked)
@@ -46,7 +48,7 @@ module.exports = {
         const r = await row(voter_id);
         if (!r) throw err(409, 'IDENTITY_NOT_STARTED', 'Start identity verification first.');
         if (r.status === 'VERIFIED') return { already_verified: true };
-        if (!PHONE_RE.test(String(contact || '')) || hashContact(contact) !== r.contact_hash) throw err(400, 'PHONE_MISMATCH', 'Mobile number does not match the one you entered.');
+        if (!isValidContact(contact) || hashContact(contact) !== r.contact_hash) throw err(400, 'DEMO_CONTACT_MISMATCH', 'The demo registration session does not match. Start registration again.');
         if (r.sends >= MAX_SENDS) throw err(429, 'OTP_SEND_LIMIT', 'Too many OTP requests. Please contact an administrator.');
         const wait = r.last_sent_at ? COOLDOWN_MS - (Date.now() - new Date(r.last_sent_at).getTime()) : 0;
         if (wait > 0) throw err(429, 'OTP_COOLDOWN', `Please wait ${Math.ceil(wait / 1000)} seconds before requesting another OTP.`, { retry_after: Math.ceil(wait / 1000) });
@@ -64,7 +66,7 @@ module.exports = {
         if (new Date(r.otp_expires_at) < new Date()) { await db.query("UPDATE identity_verifications SET status='EXPIRED' WHERE voter_id=?", [voter_id]); throw err(400, 'OTP_EXPIRED', 'The OTP has expired. Request a new one.'); }
         if (r.attempts >= MAX_ATTEMPTS) throw err(429, 'OTP_ATTEMPTS', 'Too many wrong attempts. Request a new OTP.');
         if (!/^\d{6}$/.test(String(otp || ''))) throw err(400, 'OTP_FORMAT', 'Enter the 6-digit OTP.');
-        if (!PHONE_RE.test(String(contact || '')) || hashContact(contact) !== r.contact_hash) throw err(400, 'PHONE_MISMATCH', 'Mobile number does not match the one you entered.');
+        if (!isValidContact(contact) || hashContact(contact) !== r.contact_hash) throw err(400, 'DEMO_CONTACT_MISMATCH', 'The demo registration session does not match. Start registration again.');
         const ok = await provider().checkOtp(contact, otp, { voter_id });
         if (!ok) {
             await db.query("UPDATE identity_verifications SET attempts=attempts+1 WHERE voter_id=?", [voter_id]);

@@ -10,8 +10,11 @@ const hasFk = (t, n) => has("SELECT 1 FROM information_schema.TABLE_CONSTRAINTS 
 const TABLES = {
     voters: `CREATE TABLE IF NOT EXISTS voters (
         voter_id VARCHAR(20) PRIMARY KEY, name VARCHAR(100) NOT NULL, age INT NOT NULL, gender VARCHAR(10), address TEXT,
+        district VARCHAR(100) NULL, demo_identity_hash CHAR(64) NULL, demo_identity_masked VARCHAR(20) NULL,
         has_voted BOOLEAN DEFAULT FALSE, is_eligible BOOLEAN NOT NULL DEFAULT TRUE, face_encoding LONGTEXT,
         face_registered_at TIMESTAMP NULL, registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)`,
+    voter_id_counters: `CREATE TABLE IF NOT EXISTS voter_id_counters (
+        sequence_name VARCHAR(30) PRIMARY KEY, next_value BIGINT UNSIGNED NOT NULL)`,
     candidates: `CREATE TABLE IF NOT EXISTS candidates (
         candidate_id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, party VARCHAR(100) NOT NULL,
         symbol VARCHAR(10), vote_count INT DEFAULT 0)`,
@@ -68,6 +71,9 @@ async function ensureSchema() {
     const cols = [
         ['voters', 'is_eligible', 'BOOLEAN NOT NULL DEFAULT TRUE'],
         ['voters', 'face_registered_at', 'TIMESTAMP NULL'],
+        ['voters', 'district', 'VARCHAR(100) NULL'],
+        ['voters', 'demo_identity_hash', 'CHAR(64) NULL'],
+        ['voters', 'demo_identity_masked', 'VARCHAR(20) NULL'],
         ['candidates', 'description', 'VARCHAR(500) NULL'],
         ['candidates', 'is_active', 'BOOLEAN NOT NULL DEFAULT TRUE'],
         ['candidates', 'election_id', 'INT NULL'],
@@ -96,10 +102,61 @@ async function ensureSchema() {
         ['audit_log', 'idx_audit_event', 'event_type'],
         ['audit_log', 'idx_audit_time', 'timestamp'],
         ['voters', 'idx_voters_constituency', 'constituency_id'],
+        ['voters', 'uq_voters_demo_identity_hash', 'demo_identity_hash'],
         ['candidates', 'idx_candidates_constituency', 'constituency_id'],
         ['candidates', 'idx_candidates_party', 'party_id']
     ];
-    for (const [t, i, c] of idx) if (!(await hasIndex(t, i))) { await db.query(`ALTER TABLE \`${t}\` ADD INDEX \`${i}\` (\`${c}\`)`); done.push(`+ index ${i}`); }
+    for (const [t, i, c] of idx) if (!(await hasIndex(t, i))) {
+        const unique = i === 'uq_voters_demo_identity_hash' ? 'UNIQUE ' : '';
+        await db.query(`ALTER TABLE \`${t}\` ADD ${unique}INDEX \`${i}\` (\`${c}\`)`);
+        done.push(`+ ${unique ? 'unique ' : ''}index ${i}`);
+    }
+    const [[maxVoter]] = await db.query("SELECT COALESCE(MAX(CAST(SUBSTRING(voter_id, 2) AS UNSIGNED)), 0) AS max_id FROM voters WHERE voter_id REGEXP '^V[0-9]+
+    if (!(await hasFk('candidates', 'fk_candidates_election'))) {
+        await db.query("ALTER TABLE candidates ADD CONSTRAINT fk_candidates_election FOREIGN KEY (election_id) REFERENCES elections(election_id) ON DELETE SET NULL");
+        done.push('+ fk candidates.election_id');
+    }
+    for (const [t, n, ddl] of [
+        ['voters', 'fk_voters_state', 'FOREIGN KEY (state_id) REFERENCES states(state_id) ON DELETE SET NULL'],
+        ['voters', 'fk_voters_constituency', 'FOREIGN KEY (constituency_id) REFERENCES constituencies(constituency_id) ON DELETE SET NULL'],
+        ['candidates', 'fk_candidates_party', 'FOREIGN KEY (party_id) REFERENCES parties(party_id)'],
+        ['candidates', 'fk_candidates_constituency', 'FOREIGN KEY (constituency_id) REFERENCES constituencies(constituency_id)']
+    ]) if (!(await hasFk(t, n))) { await db.query(`ALTER TABLE \`${t}\` ADD CONSTRAINT \`${n}\` ${ddl}`); done.push(`+ fk ${n}`); }
+    // A candidate name can appear only once per election and constituency (NULLs of legacy rows are ignored by MySQL/MariaDB).
+    if (!(await hasIndex('candidates', 'uq_candidate_scope'))) {
+        try { await db.query("ALTER TABLE candidates ADD UNIQUE KEY uq_candidate_scope (election_id, constituency_id, name)"); done.push('+ unique candidate per election/constituency'); }
+        catch (e) { done.push(`! uq_candidate_scope skipped: ${e.code}`); }
+    }
+    if (!(await hasFk('identity_verifications', 'fk_idv_voter'))) {
+        // Existing rows can't violate this: the table was just created empty.
+        await db.query("ALTER TABLE identity_verifications ADD CONSTRAINT fk_idv_voter FOREIGN KEY (voter_id) REFERENCES voters(voter_id) ON DELETE CASCADE");
+        done.push('+ fk identity_verifications.voter_id');
+    }
+
+    // One election row must exist so the rules have something to enforce. DRAFT = voting closed
+    // until an admin schedules it. Existing candidates are attached to it.
+    const [[{ n }]] = await db.query("SELECT COUNT(*) n FROM elections");
+    if (n === 0) { await db.query("INSERT INTO elections (name, status) VALUES ('General Election', 'DRAFT')"); done.push('+ default DRAFT election'); }
+    const [[e]] = await db.query("SELECT election_id FROM elections ORDER BY election_id LIMIT 1");
+    const [r] = await db.query("UPDATE candidates SET election_id = ? WHERE election_id IS NULL", [e.election_id]);
+    if (r.affectedRows) done.push(`+ attached ${r.affectedRows} candidate(s) to election ${e.election_id}`);
+    done.push(...await require('./seed')());
+    // Classify audit rows written before event_type/status/details existed (same rules as config/audit.js).
+    const [bf] = await db.query(`UPDATE audit_log SET
+        event_type = IF(action LIKE 'VOTED\\_FOR:%', 'VOTED', SUBSTRING_INDEX(action, ':', 1)),
+        details = IF(action LIKE 'VOTED\\_FOR:%' OR INSTR(action, ':') = 0, NULL, SUBSTRING(action, INSTR(action, ':') + 1)),
+        status = IF(action REGEXP 'DUPLICATE|DENIED|NOT_ELIGIBLE|CLOSED|UNAUTHORI[SZ]ED|NO_CONSTITUENCY', 'DENIED',
+                 IF(action REGEXP 'FAIL|REJECT|MISMATCH|WRONG|ATTEMPTS|INVALID|ERROR|UNRECOGNI[SZ]ED|NO_FACE', 'FAILED', 'SUCCESS'))
+        WHERE event_type IS NULL`);
+    if (bf.affectedRows) done.push(`+ classified ${bf.affectedRows} existing audit row(s)`);
+    // Keep the legacy `status` text column in step with is_active (is_active is what the voting code reads).
+    await db.query("UPDATE candidates SET status = IF(is_active, 'Active', 'Inactive') WHERE status <> IF(is_active, 'Active', 'Inactive')");
+    return done;
+}
+module.exports = ensureSchema;
+");
+    const nextValue = Number(maxVoter.max_id || 0) + 1;
+    await db.query("INSERT INTO voter_id_counters (sequence_name, next_value) VALUES ('voter', ?) ON DUPLICATE KEY UPDATE next_value = GREATEST(next_value, VALUES(next_value))", [nextValue]);
 
     if (!(await hasFk('candidates', 'fk_candidates_election'))) {
         await db.query("ALTER TABLE candidates ADD CONSTRAINT fk_candidates_election FOREIGN KEY (election_id) REFERENCES elections(election_id) ON DELETE SET NULL");
