@@ -8,7 +8,8 @@
     "setup-db": "node scripts/setup-db.js",
     "seed-demo": "node scripts/seed-demo.js",
     "migrate": "node scripts/migrate.js",
-    "setup-admin": "node scripts/setup-admin.js"
+    "setup-admin": "node scripts/setup-admin.js",
+    "reset-election-demo": "node scripts/reset-election-demo.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
