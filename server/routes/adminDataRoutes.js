@@ -17,7 +17,7 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
         const t = await tally();
         const [[c]] = await db.query(`SELECT COUNT(*) total, COALESCE(SUM(is_active),0) active, COALESCE(SUM(party_id IS NULL OR constituency_id IS NULL),0) unassigned FROM candidates`).then(([x]) => [x]);
         const [candidateCountsByParty] = await db.query(`SELECT COALESCE(p.party_id, 0) party_id, COALESCE(p.name, 'Unassigned') party_name, COUNT(*) candidates,
-                COALESCE(SUM(c.description LIKE 'DEMO DATA - Fictional%'), 0) demo_candidates
+                COALESCE(SUM(c.description LIKE 'SYNTHETIC DEMO DATA%'), 0) demo_candidates
             FROM candidates c LEFT JOIN parties p ON p.party_id = c.party_id
             GROUP BY p.party_id, p.name ORDER BY candidates DESC, party_name`);
         const [candidateCountsByState] = await db.query(`SELECT s.state_id, s.name state_name, s.kind, COUNT(c.candidate_id) candidates,
@@ -34,6 +34,7 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
         const [[a]] = await db.query(`SELECT COUNT(*) total, COALESCE(SUM(DATE(timestamp) = CURDATE()),0) today, COALESCE(SUM(status='FAILED'),0) failed, COALESCE(SUM(status='DENIED'),0) denied FROM audit_log`).then(([x]) => [x]);
         const [recent] = await db.query("SELECT id, voter_id, actor, action, event_type, status, details, timestamp FROM audit_log ORDER BY id DESC LIMIT 8");
         const e = await election.current();
+        const [[scope]] = await db.query("SELECT (SELECT COUNT(*) FROM states WHERE kind = 'STATE') AS states, (SELECT COUNT(*) FROM states WHERE kind = 'UT') AS union_territories, (SELECT COUNT(*) FROM constituencies WHERE kind = 'PARLIAMENTARY' AND is_active = TRUE) AS parliamentary_constituencies").then(([x]) => [x]);
 
         let blockchain = { available: false };
         try {
@@ -43,6 +44,7 @@ router.get('/dashboard-stats', requireAdmin, async (req, res) => {
 
         const eligible = Number(v.eligible), voted = Number(v.voted);
         res.json({
+            scope: { states: Number(scope.states), union_territories: Number(scope.union_territories), parliamentary_constituencies: Number(scope.parliamentary_constituencies) },
             election: e ? { name: e.name, status: e.effective_status, type: e.election_type, open: e.open, start_time: e.start_time, end_time: e.end_time } : null,
             voters: { registered: Number(v.registered), eligible, face_registered: Number(v.face_registered), voted, remaining_eligible: Number(v.remaining),
                 turnout_percent: eligible ? Math.round((voted / eligible) * 1000) / 10 : 0, without_constituency: Number(v.no_constituency) },
