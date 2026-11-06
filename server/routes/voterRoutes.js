@@ -225,7 +225,7 @@ router.post('/liveness-challenge', rateLimit('liveness-challenge', 20, 10 * 60 *
         await db.query(
             'DELETE FROM liveness_challenges WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)'
         );
-        const challenge = liveness.createChallenge();
+        const challenge = liveness.createChallenge(8);
         await db.query(
             'INSERT INTO liveness_challenges (token_hash, voter_id, actions, expires_at) VALUES (?, ?, ?, ?)',
             [liveness.hashChallengeToken(challenge.token), voterId, JSON.stringify(challenge.actions), new Date(Date.now() + 90 * 1000)]
