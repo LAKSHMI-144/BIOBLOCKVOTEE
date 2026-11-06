@@ -63,8 +63,14 @@ def _get_model():
                 digest = hashlib.sha256(path.read_bytes()).hexdigest()
                 if digest != MODEL_SHA256:
                     raise RuntimeError("The installed liveness model failed its integrity check")
+                options = onnxruntime.SessionOptions()
+                # A small 80x80 PAD model usually has lower latency with a modest
+                # thread pool than ORT's machine-wide default on student laptops.
+                options.intra_op_num_threads = 2
+                options.inter_op_num_threads = 1
+                options.execution_mode = onnxruntime.ExecutionMode.ORT_SEQUENTIAL
                 session = onnxruntime.InferenceSession(
-                    str(path), providers=["CPUExecutionProvider"]
+                    str(path), sess_options=options, providers=["CPUExecutionProvider"]
                 )
                 inputs, outputs = session.get_inputs(), session.get_outputs()
                 if (
@@ -344,3 +350,8 @@ def verify_liveness(frames, actions):
         raise RuntimeError("Liveness sequence validation failed") from error
 
     return {"success": True, "identity_frame_index": 0}
+
+
+def warmup_liveness_model():
+    """Load the PAD model at service startup, not during the first voter login."""
+    _get_model()
