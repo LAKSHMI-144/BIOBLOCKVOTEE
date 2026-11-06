@@ -89,7 +89,7 @@ export default function Vote({ mode = 'auth' }) {
       const challengeRes = await axios.post(`${API}/voters/liveness-challenge`, { voter_id: pendingId })
       const { challenge_token: challengeToken, actions, frame_count: frameCount } = challengeRes.data
       const challengeAction = actions?.[0]
-      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['blink', 'turn_left', 'turn_right'].includes(challengeAction) || ![12, 16, 24].includes(frameCount)) {
+      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['turn_left', 'look_straight'].includes(challengeAction) || ![12, 16, 24].includes(frameCount)) {
         const error = new Error(t('auth.challengeInvalid'))
         error.code = 'CHALLENGE_INVALID'
         throw error
@@ -138,7 +138,7 @@ export default function Vote({ mode = 'auth' }) {
         || identityFrameIndex < 0
         || identityFrameIndex >= frames.length
       ) {
-        const error = new Error(liveRes.data?.message || t('auth.blinkNotDetected'))
+        const error = new Error(liveRes.data?.message || t('auth.livenessFailed'))
         error.response = { status: 403, data: liveRes.data }
         throw error
       }
