@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const FRAME_COUNT = 16; // Registration keeps the full challenge.
 const FAST_AUTH_FRAME_COUNT = 12; // Shorter prototype login challenge.
 const SUPPORTED_FRAME_COUNTS = new Set([FAST_AUTH_FRAME_COUNT, FRAME_COUNT, 24]);
-const ACTIONS = ['blink', 'turn_left', 'turn_right'];
+const ACTIONS = ['turn_left', 'look_straight'];
 const MAX_FRAME_CHARS = 512 * 1024;
 const MAX_TOTAL_FRAME_CHARS = 8 * 1024 * 1024;
 const FRAME_RE = /^[A-Za-z0-9+/]+={0,2}$/;
