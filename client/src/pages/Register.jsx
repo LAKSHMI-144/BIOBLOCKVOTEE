@@ -34,6 +34,7 @@ export default function Register() {
   const busy = useRef(false)                       // blocks double submissions even before React re-renders
   const [step, setStep] = useState(1)              // 1 details · 2 identity · 3 face · 4 done
   const [identityOn, setIdentityOn] = useState(true)
+  const [registrationLivenessRequired, setRegistrationLivenessRequired] = useState(true)
   const [idvInfo, setIdvInfo] = useState(null)
   const [form, setForm] = useState(EMPTY)
   const [errors, setErrors] = useState({})         // { field: translated message }
@@ -61,7 +62,7 @@ export default function Register() {
   const say = (type, text) => setMsg(text ? { type, text } : null)
   const clearErr = f => setErrors(p => (p[f] ? { ...p, [f]: undefined } : p))
 
-  useEffect(() => { axios.get(`${API}/config`).then(r => { setIdentityOn(r.data.identity.mode === 'required'); setIdvInfo(r.data.identity) }).catch(() => {}) }, [])
+  useEffect(() => { axios.get(`${API}/config`).then(r => { setIdentityOn(r.data.identity.mode === 'required'); setIdvInfo(r.data.identity); setRegistrationLivenessRequired(r.data.registration_liveness_required !== false) }).catch(() => {}) }, [])
   useEffect(() => { axios.get(`${API}/geo/states`).then(r => setStates(r.data)).catch(() => setGeoErr(true)) }, [])
   useEffect(() => {
     if (!form.state_id) return
@@ -160,7 +161,7 @@ export default function Register() {
   }
 
   const capture = useCallback(async () => {
-    if (!livenessToken) return say('error', 'Complete the live-face challenge before capturing registration images.')
+    if (registrationLivenessRequired && !livenessToken) return say('error', 'Complete the live-face challenge before capturing registration images.')
     if (busy.current) return
     if (images.length >= MAX_IMAGES) return
     const shot = webcamRef.current?.getScreenshot()
@@ -170,11 +171,14 @@ export default function Register() {
     if (!r) return
     if (r.error) return setFaceStatus(r.error.message)
     setImages(p => [...p, b64]); setFaceStatus(t('face.detected')); say('success', t('face.accepted', { n: images.length + 1 }))
-  }, [images, t, livenessToken])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [images, t, livenessToken, registrationLivenessRequired])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitFace = async () => {
     if (images.length < MIN_IMAGES) return say('error', t('face.needMore', { min: MIN_IMAGES }))
-    const r = await run(t('reg.processing'), () => axios.post(`${API}/voters/register-face`, { liveness_token: livenessToken, liveness_frame: livenessFrame, images }, bearer(regToken.get())))
+    const payload = registrationLivenessRequired
+      ? { liveness_token: livenessToken, liveness_frame: livenessFrame, images }
+      : { images }
+    const r = await run(t('reg.processing'), () => axios.post(`${API}/voters/register-face`, payload, bearer(regToken.get())))
     if (!r) return
     setImages([])                                   // captures are never kept after a try
     if (r.error) { setLivenessToken(''); setLivenessFrame(''); if (r.error.code === 'REG_SESSION') setStep(1); return }
@@ -277,9 +281,9 @@ export default function Register() {
               {['face.i1', 'face.i2', 'face.i3', 'face.i4', 'face.i5'].map(k => <li key={k}>{t(k)}</li>)}
               <li>{t('face.i6', { min: MIN_IMAGES })}</li>
             </ol>
-            <p className="hint">{livenessToken ? 'Live-face check passed.' : 'Complete the live-face check first.'}</p>
+            <p className="hint">{registrationLivenessRequired ? (livenessToken ? 'Live-face check passed.' : 'Complete the live-face check first.') : 'Demo enrollment: capture starts directly. Liveness verification is still required when logging in.'}</p>
             <p className="hint">Your voter ID will be generated automatically.</p>
-            {activeChallenge && <p className="prompt">{activeChallenge === 'blink' ? 'Blink now.' : activeChallenge === 'turn_left' ? 'Turn your head slightly left now.' : 'Turn your head slightly right now.'}</p>}
+            {registrationLivenessRequired && activeChallenge && <p className="prompt">{activeChallenge === 'blink' ? 'Blink now.' : activeChallenge === 'turn_left' ? 'Turn your head slightly left now.' : 'Turn your head slightly right now.'}</p>}
             <p className="prompt">{images.length < MAX_IMAGES ? t(`face.prompt${images.length + 1}`) : t('face.allCaptured')}</p>
             <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg" screenshotQuality={0.92} videoConstraints={VIDEO}
               className="webcam" style={{ width: 320, maxWidth: '100%' }}
@@ -288,8 +292,8 @@ export default function Register() {
             <div className="dots">{Array.from({ length: MAX_IMAGES }).map((_, i) => <div key={i} className={`dot ${i < images.length ? 'filled' : ''}`} />)}</div>
             <p className="hint">{t('face.progress', { n: images.length, min: MIN_IMAGES, max: MAX_IMAGES })}</p>
             <div className="btn-row">
-              {!livenessToken && <button type="button" className="btn primary" onClick={runRegistrationLiveness} disabled={!!loading || !cameraReady}>Start live-face check</button>}
-              <button type="button" className="btn danger" onClick={capture} disabled={!!loading || !cameraReady || !livenessToken || images.length >= MAX_IMAGES}>📸 {t('face.capture')}</button>
+              {registrationLivenessRequired && !livenessToken && <button type="button" className="btn primary" onClick={runRegistrationLiveness} disabled={!!loading || !cameraReady}>Start live-face check</button>}
+              <button type="button" className="btn danger" onClick={capture} disabled={!!loading || !cameraReady || (registrationLivenessRequired && !livenessToken) || images.length >= MAX_IMAGES}>📸 {t('face.capture')}</button>
               <button type="button" className="btn secondary" onClick={() => { setImages([]); setFaceStatus(''); say(null) }} disabled={!!loading || images.length === 0}>↺ {t('face.retake')}</button>
               <button type="button" className="btn primary" onClick={submitFace} disabled={!!loading || images.length < MIN_IMAGES}>{loading === t('reg.processing') ? t('reg.processing') : t('face.register')}</button>
               <button type="button" className="btn secondary" disabled={!!loading} onClick={() => { say(null); setStep(identityOn ? 2 : 1) }}>{t('common.back')}</button>
