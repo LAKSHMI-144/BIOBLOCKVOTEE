@@ -25,6 +25,7 @@ MIN_FACE_WIDTH_RATIO = 0.15      # face box width / image width
 MIN_BLUR_SCORE = float(os.getenv("FACE_MIN_BLUR", "15"))   # variance of Laplacian on 160px face crop (real faces ~30-80, blurred ~3)
 BRIGHTNESS_RANGE = (50, 210)     # mean gray level of face crop
 MAX_YAW_RATIO = 0.40             # |nose offset| / eye distance (0 = frontal)
+MAX_REGISTRATION_YAW_RATIO = 0.65  # allow a modest turn for left/right enrollment views
 OTHER_FACE_MIN_RATIO = 0.05      # smaller faces are ignored as background noise
 
 
@@ -69,7 +70,7 @@ def decode_image(b64_string):
     return img
 
 
-def analyze_image(b64_string):
+def analyze_image(b64_string, allow_registration_pose=False):
     """
     Detect exactly one usable face and return its normalised 512-d embedding.
     Raises FaceError with a specific code for every rejection reason.
@@ -109,8 +110,9 @@ def analyze_image(b64_string):
     kps = f.kps  # left eye, right eye, nose, left mouth, right mouth
     eye_dist = float(np.linalg.norm(kps[1] - kps[0])) or 1.0
     yaw = abs(float(kps[2][0] - (kps[0][0] + kps[1][0]) / 2)) / eye_dist
-    if yaw > MAX_YAW_RATIO:
-        raise FaceError("NOT_FRONTAL", "Please look towards the camera.")
+    yaw_limit = MAX_REGISTRATION_YAW_RATIO if allow_registration_pose else MAX_YAW_RATIO
+    if yaw > yaw_limit:
+        raise FaceError("NOT_FRONTAL", "Please turn only slightly and keep both eyes visible.")
 
     emb = np.asarray(f.normed_embedding, dtype=np.float32)
     return emb / (np.linalg.norm(emb) or 1.0)
@@ -134,7 +136,7 @@ def build_template(b64_images):
     embeddings, thumbs = [], []
     for i, b64 in enumerate(b64_images, start=1):
         try:
-            embeddings.append(analyze_image(b64))
+            embeddings.append(analyze_image(b64, allow_registration_pose=True))
             thumbs.append(_thumb(b64))
         except FaceError as e:
             raise FaceError(e.code, f"Image {i}: {e.message}")
