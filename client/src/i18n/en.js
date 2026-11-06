@@ -65,9 +65,9 @@ export default {
   'idv.sentTo': 'OTP sent to {masked}.', 'idv.resendIn': 'Resend OTP in {s} seconds', 'idv.resend': 'Resend OTP', 'idv.verified': 'Verification successful.',
   'idv.change': 'Change number',
 
-  'face.title': 'Face verification',
+  'face.title': 'Face registration',
   'face.i1': 'Allow camera access.', 'face.i2': 'Look directly at the camera.', 'face.i3': 'Keep your face inside the frame.',
-  'face.i4': 'Make sure the lighting is sufficient.', 'face.i5': 'Remove masks or sunglasses.', 'face.i6': 'Capture your face (at least {min} photos).',
+  'face.i4': 'Make sure the lighting is sufficient.', 'face.i5': 'Remove masks or sunglasses.', 'face.i6': 'Capture three clear views: front, left and right.',
   'face.waiting': 'Waiting for camera...', 'face.permission': 'Camera permission required. Allow camera access in your browser and reload.',
   'face.noFace': 'No face detected.', 'face.multiple': 'Multiple faces detected.', 'face.detected': 'Face detected.',
   'face.capture': 'Capture', 'face.retake': 'Retake all', 'face.register': 'Register face', 'face.accepted': 'Image {n} accepted',
