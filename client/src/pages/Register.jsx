@@ -246,7 +246,7 @@ export default function Register() {
               <li>{t('face.i6', { min: MIN_IMAGES })}</li>
             </ol>
             <p className="hint">Capture 3–5 face images. Liveness verification remains required when logging in.</p>
-            <p className="hint">Your voter ID will be generated automatically.</p>
+            <p className="hint">Your assigned Voter ID: <strong>{form.voter_id}</strong> · Face enrollment is pending until you complete registration.</p>
             <p className="prompt">{images.length < MAX_IMAGES ? t(`face.prompt${images.length + 1}`) : t('face.allCaptured')}</p>
             <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg" screenshotQuality={0.92} videoConstraints={VIDEO}
               className="webcam" style={{ width: 320, maxWidth: '100%' }}
