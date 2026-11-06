@@ -23,6 +23,7 @@ TARGET_LIVE_SCORE = 0.80
 MIN_TARGET_SCORE_RATIO = 0.70
 MIN_FACE_SIMILARITY = 0.50
 MIN_HEAD_TURN_DELTA = 0.08
+MAX_STRAIGHT_HEAD_OFFSET = 0.12
 MODEL_SHA256 = "87a9ac1dbb16a61eec212957e5095e62a8769c1e188af9b0198f253302c4afdb"
 DESTINATION_LANDMARKS = np.array(
     [[32.03, 38.06], [47.89, 37.98], [40.01, 47.08],
@@ -192,7 +193,7 @@ def _validate_actions(actions):
     if (
         not isinstance(actions, list)
         or len(actions) != 1
-        or actions[0] not in ("blink", "turn_left", "turn_right")
+        or actions[0] not in ("turn_left", "look_straight")
     ):
         raise LivenessError("INVALID_CHALLENGE", "The liveness challenge is invalid.")
 
@@ -216,15 +217,26 @@ def validate_observations(observations, actions):
             raise LivenessError("INVALID_FRAMES", "The camera measurements are invalid.")
 
     scores = [item["live_score"] for item in observations]
+    min_score = float(min(scores))
+    mean_score = float(np.mean(scores))
+    target_ratio = sum(score >= TARGET_LIVE_SCORE for score in scores) / len(scores)
     if (
-        min(scores) < MIN_LIVE_SCORE
-        or float(np.mean(scores)) < TARGET_LIVE_SCORE
-        or sum(score >= TARGET_LIVE_SCORE for score in scores) / len(scores)
-        < MIN_TARGET_SCORE_RATIO
+        min_score < MIN_LIVE_SCORE
+        or mean_score < TARGET_LIVE_SCORE
+        or target_ratio < MIN_TARGET_SCORE_RATIO
     ):
+        log.warning(
+            "PAD threshold check failed: min=%.3f mean=%.3f target_ratio=%.3f",
+            min_score, mean_score, target_ratio,
+        )
         raise LivenessError(
-            "LIVENESS_FAILED",
-            "The camera could not confirm a live face. Please try the challenge again.",
+            "PAD_SCORE_FAILED",
+            (
+                "The presentation-attack model did not reach its confidence thresholds "
+                f"(minimum {min_score:.2f}, average {mean_score:.2f}, "
+                f"frames at target {target_ratio:.0%}). Keep only one face centered "
+                "in the camera, face forward and use even lighting, then retry."
+            ),
         )
 
     embeddings = [item["embedding"] for item in observations if item["embedding"] is not None]
@@ -244,42 +256,30 @@ def validate_observations(observations, actions):
         )
 
     prompted_frames = observations[2:-2]
-    if actions[0] == "blink":
-        open_frames = observations[:2] + observations[-2:]
-        baseline_ear = float(np.median([item["eye_ratio"] for item in open_frames]))
-        if baseline_ear < 0.12:
-            raise LivenessError(
-                "BLINK_NOT_DETECTED",
-                "Keep both eyes visible and look at the camera before blinking.",
-            )
-        open_threshold = max(0.12, baseline_ear * 0.88)
-        closed_threshold = max(0.10, baseline_ear * 0.72)
-        blink_closed_indices = [
-            index for index, item in enumerate(prompted_frames)
-            if item["eye_ratio"] <= closed_threshold
+    if actions[0] == "look_straight":
+        straight_frames = [
+            item for item in prompted_frames
+            if abs(item["head_turn"]) <= MAX_STRAIGHT_HEAD_OFFSET
         ]
-        detected = any(
-            any(item["eye_ratio"] >= open_threshold for item in observations[:closed_index + 4])
-            and any(item["eye_ratio"] >= open_threshold for item in prompted_frames[closed_index + 1:])
-            for closed_index in blink_closed_indices
-        )
-        if not detected:
+        required = int(np.ceil(len(prompted_frames) * MIN_TARGET_SCORE_RATIO))
+        if len(straight_frames) < required:
             raise LivenessError(
-                "BLINK_NOT_DETECTED",
-                "Blink when prompted.",
+                "LOOK_STRAIGHT_NOT_DETECTED",
+                "Face the camera directly and keep your head centered until verification finishes.",
             )
         return
 
     baseline_turn = float(np.median([item["head_turn"] for item in observations[:2]]))
-    direction = 1 if actions[0] == "turn_left" else -1
     turned_frames = [
         item["head_turn"] - baseline_turn
         for item in prompted_frames
-        if direction * (item["head_turn"] - baseline_turn) >= MIN_HEAD_TURN_DELTA
+        if item["head_turn"] - baseline_turn >= MIN_HEAD_TURN_DELTA
     ]
     if len(turned_frames) < 2:
-        code = "TURN_LEFT_NOT_DETECTED" if direction > 0 else "TURN_RIGHT_NOT_DETECTED"
-        raise LivenessError(code, "Head turn not detected.")
+        raise LivenessError(
+            "TURN_LEFT_NOT_DETECTED",
+            "Turn your head slightly to your left and hold it briefly.",
+        )
 
 
 def verify_liveness(frames, actions):
