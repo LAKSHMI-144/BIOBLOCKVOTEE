@@ -1,6 +1,6 @@
 // Reset the old academic demo records and populate a national Lok Sabha simulation.
 // DESTRUCTIVE TO VOTER/CANDIDATE DATA: removes all existing voters and candidate rows.
-// It preserves state/party masters, the admin account, and admin audit history.
+// It preserves state/party masters and the admin account. All audit history is reset for a fresh demo.
 // Candidate records are synthetic placeholders, NOT official nominees or a real ballot.
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const db = require('../config/db');
@@ -111,7 +111,7 @@ async function main() {
         await conn.beginTransaction();
         await conn.query('DELETE FROM voters');
         await conn.query('DELETE FROM candidates');
-        await conn.query("DELETE FROM audit_log WHERE actor = 'voter' OR voter_id IS NOT NULL");
+        await conn.query('DELETE FROM audit_log');
         await conn.query("INSERT INTO voter_id_counters (sequence_name, next_value) VALUES ('voter', 1) ON DUPLICATE KEY UPDATE next_value = 1");
         await conn.query("UPDATE elections SET status = 'ENDED' WHERE election_id <> ?", [latestElection.election_id]);
         await conn.query(
@@ -132,6 +132,7 @@ async function main() {
     }
 
     await db.query('ALTER TABLE candidates AUTO_INCREMENT = 1');
+    await db.query('ALTER TABLE audit_log AUTO_INCREMENT = 1');
 
     const [voterRows] = await db.query('SELECT COUNT(*) AS n FROM voters');
     const [candidateRows] = await db.query('SELECT COUNT(*) AS n FROM candidates');
