@@ -228,9 +228,11 @@ export default function Vote({ mode = 'auth' }) {
             key={cameraKey}
             ref={webcamRef}
             screenshotFormat="image/jpeg"
-            screenshotQuality={0.65}
+            screenshotQuality={0.92}
+            screenshotWidth={640}
+            screenshotHeight={480}
             width={300}
-            videoConstraints={{ facingMode: 'user' }}
+            videoConstraints={{ width: 640, height: 480, facingMode: 'user' }}
             className="webcam"
             onUserMedia={stream => {
               streamRef.current = stream
