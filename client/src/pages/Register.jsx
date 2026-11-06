@@ -121,15 +121,23 @@ export default function Register() {
 
   // ---- face step: three quick guided captures (front, left, right).
   // Quality and same-person validation run on the server when the voter submits the three images.
-  const capture = useCallback(() => {
+  const capture = useCallback(async () => {
     if (busy.current || !cameraReady || images.length >= MAX_IMAGES) return
     const shot = webcamRef.current?.getScreenshot()
     if (!shot) return say('error', t('face.waiting'))
     const b64 = shot.split(',')[1]
+    const r = await run(t('face.checkingImage'), () => axios.post(`${API}/voters/check-face`, {
+      image: b64,
+      allow_registration_pose: images.length > 0
+    }))
+    if (!r || r.error) {
+      if (r?.error) setFaceStatus(r.error.message)
+      return
+    }
     setImages(current => [...current, b64])
     setFaceStatus(t('face.accepted', { n: images.length + 1 }))
     say('success', t('face.accepted', { n: images.length + 1 }))
-  }, [cameraReady, images.length, t])
+  }, [cameraReady, images.length, t])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitFace = async () => {
     if (images.length !== MIN_IMAGES) return say('error', t('face.needMore', { min: MIN_IMAGES }))
