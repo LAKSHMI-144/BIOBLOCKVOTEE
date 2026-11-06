@@ -64,9 +64,9 @@ export default function AdminDashboard() {
       {d && (
         <>
           <div className="bb-metrics-grid">
-            <Metric icon={<IconUsers />} label="Registered voters" value={d.voters.registered} hint={`${d.voters.face_registered} with a registered face`} tone="indigo" />
+            <Metric icon={<IconUsers />} label="Registered voters" value={d.voters.registered} hint="Completed face registrations" tone="indigo" />
             <Metric icon={<IconShield />} label="Eligible voters" value={d.voters.eligible} hint={`${d.voters.registered - d.voters.eligible} not eligible`} tone="purple" />
-            <Metric icon={<IconBallot />} label="Candidates" value={d.candidates.total} hint={`${d.scope.parliamentary_constituencies} parliamentary seats · ${d.candidates.active} active demo entries`} tone="amber" />
+            <Metric icon={<IconBallot />} label="Candidates" value={d.candidates.total} tone="amber" />
             <Metric icon={<IconCheck />} label="Votes cast" value={d.votes.total} hint={`${d.voters.remaining_eligible} eligible voters yet to vote`} tone="green" />
           </div>
 
@@ -88,11 +88,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-
-          <div className="bb-inline-note" role="note">
-            <strong>National coverage:</strong> {d.scope.parliamentary_constituencies} Lok Sabha constituencies across {d.scope.states} states and {d.scope.union_territories} Union Territories · four synthetic party options per constituency.
-            <div style={{ marginTop: 6 }}>Voters choose one Member of Parliament candidate from their own constituency. The Prime Minister is determined through Lok Sabha majority and government formation; voters do not cast a separate nationwide vote directly for Prime Minister. All preloaded candidate names are fictional placeholders for this academic simulation.</div>
-          </div>
 
                     {(d.voters.without_constituency > 0 || d.candidates.unassigned > 0 || !d.votes.consistent || mismatch) && (
             <div className="bb-inline-note" role="status">
