@@ -55,6 +55,14 @@ export default function Vote({ mode = 'auth' }) {
 
   const fail = (text) => setMsg({ type: 'error', text })
 
+  useEffect(() => {
+    if (mode !== 'auth') return
+    axios.get(`${API}/config`)
+      .then(response => setFaceOnlyDemo(response.data?.face_only_demo === true))
+      .catch(() => setAuthConfigError(true))
+      .finally(() => setAuthConfigLoaded(true))
+  }, [mode])
+
   const stopCamera = () => {
     const stream = streamRef.current || webcamRef.current?.video?.srcObject
     stream?.getTracks().forEach(track => track.stop())
