@@ -1,18 +1,22 @@
 const crypto = require('crypto');
 
-const FRAME_COUNT = 16;
-const SUPPORTED_FRAME_COUNTS = new Set([FRAME_COUNT, 24]);
+const FRAME_COUNT = 16; // Registration keeps the full challenge.
+const FAST_AUTH_FRAME_COUNT = 8; // Shorter prototype login challenge.
+const SUPPORTED_FRAME_COUNTS = new Set([FAST_AUTH_FRAME_COUNT, FRAME_COUNT, 24]);
 const ACTIONS = ['blink', 'turn_left', 'turn_right'];
 const MAX_FRAME_CHARS = 512 * 1024;
 const MAX_TOTAL_FRAME_CHARS = 8 * 1024 * 1024;
 const FRAME_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 const HASH_RE = /^[a-f0-9]{64}$/;
 
-function createChallenge() {
+function createChallenge(frameCount = FRAME_COUNT) {
+    if (!SUPPORTED_FRAME_COUNTS.has(frameCount)) {
+        throw new RangeError('Unsupported liveness frame count');
+    }
     return {
         token: crypto.randomBytes(32).toString('hex'),
         actions: [ACTIONS[crypto.randomInt(ACTIONS.length)]],
-        frame_count: FRAME_COUNT
+        frame_count: frameCount
     };
 }
 
@@ -147,6 +151,7 @@ async function consumeLivenessPass(db, verificationTokenHash, voterId, image) {
 
 module.exports = {
     FRAME_COUNT,
+    FAST_AUTH_FRAME_COUNT,
     ACTIONS,
     createChallenge,
     createVerificationToken,
