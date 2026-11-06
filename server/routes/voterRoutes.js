@@ -10,6 +10,7 @@ const liveness = require('../services/liveness');
 const { FRAME_COUNT, FAST_AUTH_FRAME_COUNT } = liveness;
 // Registration can skip its extra liveness challenge only in explicitly configured non-production demos.
 const REGISTRATION_LIVENESS_REQUIRED = process.env.NODE_ENV === 'production';
+const FACE_ONLY_DEMO = process.env.NODE_ENV !== 'production' && process.env.DEMO_FACE_ONLY === 'true';
 const requireAdmin = require('../middleware/requireAdmin');
 const rateLimit = require('../middleware/rateLimit');
 
@@ -330,17 +331,19 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
     const verificationHash = liveness.hashChallengeToken(livenessToken);
     if (!VOTER_ID_RE.test(typed))
         return fail(res, 400, 'Enter a valid Voter ID.', { code: 'ID_FORMAT' });
-    if (!verificationHash || !validImage(image))
+    if (!validImage(image) || (!FACE_ONLY_DEMO && !verificationHash))
         return fail(res, 400, 'The face verification data is invalid. Start again.', { code: 'INVALID_LIVENESS_DATA' });
 
     let livenessPassed = false;
     try {
-        livenessPassed = await liveness.consumeLivenessPass(db, verificationHash, typed, image);
-        if (!livenessPassed) {
-            await audit(typed, 'AUTH_FAILED:LIVENESS_PROOF_INVALID');
-            return fail(res, 401, 'Face verification expired or the camera frame changed. Start again.', {
-                code: 'LIVENESS_CHALLENGE_INVALID'
-            });
+        if (!FACE_ONLY_DEMO) {
+            livenessPassed = await liveness.consumeLivenessPass(db, verificationHash, typed, image);
+            if (!livenessPassed) {
+                await audit(typed, 'AUTH_FAILED:LIVENESS_PROOF_INVALID');
+                return fail(res, 401, 'Face verification expired or the camera frame changed. Start again.', {
+                    code: 'LIVENESS_CHALLENGE_INVALID'
+                });
+            }
         }
 
         const [voterRows] = await db.query(
@@ -390,11 +393,16 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
                 liveness_passed: true, message: `${voter_name} has already voted!`
             });
         }
-        if (!liveness.isVerificationComplete(livenessPassed, aiRes.data.success))
+        if (!FACE_ONLY_DEMO && !liveness.isVerificationComplete(livenessPassed, aiRes.data.success))
             return fail(res, 403, 'Both camera liveness and face identity verification are required.', { code: 'VERIFICATION_REQUIRED' });
-        await audit(voter_id, 'AUTHENTICATED');
+        await audit(voter_id, FACE_ONLY_DEMO ? 'AUTHENTICATED_FACE_ONLY_DEMO' : 'AUTHENTICATED');
         res.set('Cache-Control', 'no-store');
-        res.json({ ...aiRes.data, liveness_passed: true, session_token: tokens.signVoter(voter_id) });
+        res.json({
+            ...aiRes.data,
+            liveness_passed: livenessPassed,
+            verification_mode: FACE_ONLY_DEMO ? 'FACE_ONLY_DEMO' : 'LIVENESS_AND_FACE',
+            session_token: tokens.signVoter(voter_id)
+        });
     } catch (e) {
         console.error('authenticate error:', e.message);
         await audit(typed, 'AUTH_FAILED:AI_UNAVAILABLE');
