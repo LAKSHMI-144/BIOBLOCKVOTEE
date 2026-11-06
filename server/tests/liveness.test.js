@@ -39,6 +39,9 @@ test('liveness frame payload has a strict count and per-frame/aggregate limits',
     const frame = Buffer.alloc(100, 1).toString('base64');
     assert.equal(validateFrames(Array(FRAME_COUNT).fill(frame)), true);
     assert.equal(validateFrames(Array(8).fill(frame)), true);
+    assert.equal(validateFrames(Array(8).fill(frame), 8), true);
+    assert.equal(validateFrames(Array(8).fill(frame), FRAME_COUNT), false);
+    assert.equal(validateFrames(Array(FRAME_COUNT).fill(frame), FRAME_COUNT), true);
     assert.equal(validateFrames(Array(24).fill(frame)), true);
     assert.equal(validateFrames(Array(FRAME_COUNT - 1).fill(frame)), false);
     assert.equal(validateFrames(Array(FRAME_COUNT + 1).fill(frame)), false);
