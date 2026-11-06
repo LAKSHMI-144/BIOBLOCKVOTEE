@@ -21,7 +21,8 @@ def observations(blink=True, frame_count=liveness.FRAME_COUNT):
         for _ in range(frame_count)
     ]
     if blink:
-        for offset, ratio in enumerate((0.24, 0.13, 0.12, 0.15, 0.20, 0.24, 0.25, 0.25)):
+        ratios = (0.12, 0.24, 0.20, 0.24) if frame_count == 8 else (0.24, 0.13, 0.12, 0.15, 0.20, 0.24, 0.25, 0.25)
+        for offset, ratio in enumerate(ratios):
             rows[offset + 2]["eye_ratio"] = ratio
     return rows
 
@@ -45,6 +46,15 @@ class LivenessSequenceTests(unittest.TestCase):
 
     def test_single_blink_challenge_passes_with_open_closed_open_frames(self):
         liveness.validate_observations(observations(), ["blink"])
+
+    def test_fast_8_frame_login_challenge_passes_blink(self):
+        liveness.validate_observations(observations(frame_count=8), ["blink"])
+
+    def test_fast_8_frame_login_challenge_passes_head_turn(self):
+        rows = observations(blink=False, frame_count=8)
+        for index in (2, 3, 4):
+            rows[index]["head_turn"] = -0.12
+        liveness.validate_observations(rows, ["turn_right"])
 
     def test_legacy_24_frame_challenge_remains_supported(self):
         liveness.validate_observations(
