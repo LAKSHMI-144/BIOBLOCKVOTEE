@@ -15,7 +15,7 @@ const NAME_RE = /^\p{L}[\p{L}\p{M}\s.'-]{1,98}$/u;
 const GENDERS = ['Male', 'Female', 'Other'];
 const MIN_AGE = 18, MAX_AGE = 120;
 const PENDING_RECLAIM_MS = 60 * 60 * 1000;      // an abandoned half-finished registration frees its ID after 1 hour
-const MIN_IMAGES = 3, MAX_IMAGES = 5, MAX_IMAGE_CHARS = 3 * 1024 * 1024;
+const MIN_IMAGES = 3, MAX_IMAGES = 3, MAX_IMAGE_CHARS = 3 * 1024 * 1024;
 const B64_RE = /^[A-Za-z0-9+/=\s]+$/;
 
 const fail = (res, status, message, extra = {}) => res.status(status).json({ success: false, message, ...extra });
