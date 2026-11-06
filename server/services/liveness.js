@@ -34,8 +34,13 @@ function hashFrame(frame) {
     return crypto.createHash('sha256').update(frame, 'ascii').digest('hex');
 }
 
-function validateFrames(frames) {
-    if (!Array.isArray(frames) || !SUPPORTED_FRAME_COUNTS.has(frames.length)) return false;
+function validateFrames(frames, expectedFrameCount = null) {
+    if (!Array.isArray(frames)) return false;
+    if (expectedFrameCount === null) {
+        if (!SUPPORTED_FRAME_COUNTS.has(frames.length)) return false;
+    } else if (frames.length !== expectedFrameCount) {
+        return false;
+    }
     let total = 0;
     for (const frame of frames) {
         if (
