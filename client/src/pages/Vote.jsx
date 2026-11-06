@@ -31,6 +31,9 @@ export default function Vote({ mode = 'auth' }) {
   const [livenessState, setLivenessState] = useState('camera_waiting')
   const [cameraKey, setCameraKey] = useState(0)
   const [activeChallenge, setActiveChallenge] = useState('')
+  const [faceOnlyDemo, setFaceOnlyDemo] = useState(false)
+  const [authConfigLoaded, setAuthConfigLoaded] = useState(mode !== 'auth')
+  const [authConfigError, setAuthConfigError] = useState(false)
 
   useEffect(() => () => {
     const stream = streamRef.current
