@@ -8,6 +8,8 @@ const tokens = require('../config/tokens');
 const identity = require('../services/identity');
 const liveness = require('../services/liveness');
 const { FRAME_COUNT, FAST_AUTH_FRAME_COUNT } = liveness;
+// Registration can skip its extra liveness challenge only in explicitly configured non-production demos.
+const REGISTRATION_LIVENESS_REQUIRED = process.env.NODE_ENV === 'production' || process.env.REGISTRATION_LIVENESS_REQUIRED === 'true';
 const requireAdmin = require('../middleware/requireAdmin');
 const rateLimit = require('../middleware/rateLimit');
 
@@ -185,7 +187,7 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
         if (body.voter_id && String(body.voter_id).trim().toUpperCase() !== voter_id) return fail(res, 403, 'This registration session belongs to a different Voter ID.', { code: 'ID_MISMATCH' });
         const images = body.images;
         const livenessTokenHash = liveness.hashChallengeToken(body.liveness_token);
-        if (!livenessTokenHash || !validImage(body.liveness_frame)) return fail(res, 400, 'Complete the live-face challenge before registering your face.', { code: 'INVALID_LIVENESS_DATA' });
+        if (REGISTRATION_LIVENESS_REQUIRED && (!livenessTokenHash || !validImage(body.liveness_frame))) return fail(res, 400, 'Complete the live-face challenge before registering your face.', { code: 'INVALID_LIVENESS_DATA' });
         if (!Array.isArray(images) || images.length < MIN_IMAGES || images.length > MAX_IMAGES || !images.every(validImage))
             return fail(res, 400, `Send ${MIN_IMAGES}-${MAX_IMAGES} valid face images`, { code: 'INVALID_IMAGE' });
 
@@ -193,8 +195,10 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
         if (voter.length === 0) return fail(res, 404, "Register voter details first");
         if (identity.mode() === 'required' && !(await identity.isVerified(voter_id)))
             return fail(res, 403, 'Verify the demo OTP before registering your face.', { code: 'IDENTITY_REQUIRED' });
-        const live = await liveness.consumeLivenessPass(db, livenessTokenHash, voter_id, body.liveness_frame);
-        if (!live) return fail(res, 403, 'Your live-face check expired or did not match. Start the challenge again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
+        if (REGISTRATION_LIVENESS_REQUIRED) {
+            const live = await liveness.consumeLivenessPass(db, livenessTokenHash, voter_id, body.liveness_frame);
+            if (!live) return fail(res, 403, 'Your live-face check expired or did not match. Start the challenge again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
+        }
         const r = await ai.post('/register-face', { voter_id, images });
         if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); await audit(voter_id, 'FACE_REGISTRATION_FAILED:AI_MISCONFIGURED'); return fail(res, 503, "Face service is misconfigured. Ask the administrator to check INTERNAL_API_KEY in server/.env and python_ai/.env.", { code: 'AI_MISCONFIGURED' }); }
         if (r.data && r.data.success) await audit(voter_id, 'FACE_REGISTERED');
