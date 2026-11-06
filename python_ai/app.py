@@ -62,7 +62,8 @@ def health():
 def check_face():
     """Validate a single webcam frame (one face, good quality). Stores nothing."""
     try:
-        analyze_image((request.get_json(silent=True) or {}).get("image"))
+        data = request.get_json(silent=True) or {}
+        analyze_image(data.get("image"), allow_registration_pose=data.get("allow_registration_pose") is True)
         return jsonify({"success": True, "message": "Face looks good"})
     except FaceError as e:
         return face_error_response(e)
