@@ -7,6 +7,7 @@ const audit = require('../config/audit');
 const tokens = require('../config/tokens');
 const identity = require('../services/identity');
 const liveness = require('../services/liveness');
+const { FRAME_COUNT, FAST_AUTH_FRAME_COUNT } = liveness;
 const requireAdmin = require('../middleware/requireAdmin');
 const rateLimit = require('../middleware/rateLimit');
 
@@ -139,7 +140,7 @@ router.post('/register-liveness-challenge', rateLimit('register-liveness-challen
 router.post('/check-registration-liveness', rateLimit('check-registration-liveness', 20, 10 * 60 * 1000), requireReg, async (req, res) => {
     const { challenge_token: challengeToken, frames } = req.body || {};
     const tokenHash = liveness.hashChallengeToken(challengeToken);
-    if (!tokenHash || !liveness.validateFrames(frames))
+    if (!tokenHash || !liveness.validateFrames(frames, FRAME_COUNT))
         return fail(res, 400, 'The camera challenge data is invalid. Start again.', { code: 'INVALID_LIVENESS_DATA' });
     try {
         const actions = await liveness.consumeChallenge(db, tokenHash, req.regVoter);
@@ -225,7 +226,7 @@ router.post('/liveness-challenge', rateLimit('liveness-challenge', 20, 10 * 60 *
         await db.query(
             'DELETE FROM liveness_challenges WHERE expires_at < DATE_SUB(NOW(), INTERVAL 1 DAY)'
         );
-        const challenge = liveness.createChallenge(8);
+        const challenge = liveness.createChallenge(FAST_AUTH_FRAME_COUNT);
         await db.query(
             'INSERT INTO liveness_challenges (token_hash, voter_id, actions, expires_at) VALUES (?, ?, ?, ?)',
             [liveness.hashChallengeToken(challenge.token), voterId, JSON.stringify(challenge.actions), new Date(Date.now() + 90 * 1000)]
@@ -250,7 +251,7 @@ router.post('/check-liveness', rateLimit('check-liveness', 20, 10 * 60 * 1000), 
     const tokenHash = liveness.hashChallengeToken(challengeToken);
     if (!VOTER_ID_RE.test(typed))
         return fail(res, 400, 'Enter a valid Voter ID.', { code: 'ID_FORMAT' });
-    if (!tokenHash || !liveness.validateFrames(frames))
+    if (!tokenHash || !liveness.validateFrames(frames, FAST_AUTH_FRAME_COUNT))
         return fail(res, 400, 'The camera challenge data is invalid. Start again.', { code: 'INVALID_LIVENESS_DATA' });
 
     try {
