@@ -22,7 +22,8 @@ app.use('/api/geo', require('./routes/geoRoutes'));
 // Public, non-secret configuration the UI needs to decide which registration steps to show.
 app.get('/api/config', (req, res) => res.json({
     identity: require('./services/identity').info(),
-    registration_liveness_required: process.env.NODE_ENV === 'production'
+    registration_liveness_required: process.env.NODE_ENV === 'production',
+    face_only_demo: process.env.NODE_ENV !== 'production' && process.env.DEMO_FACE_ONLY === 'true'
 }));
 
 app.get('/', (req, res) => res.json({ message: 'BlockBioVote Server Running ✅' }));
