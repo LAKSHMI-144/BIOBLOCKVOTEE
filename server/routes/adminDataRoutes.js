@@ -12,8 +12,15 @@ const oops = (res, tag, e, msg) => { console.error(`${tag}:`, e.message); res.st
 
 router.get('/dashboard-stats', requireAdmin, async (req, res) => {
     try {
-        const [[v]] = await db.query(`SELECT COUNT(*) registered, COALESCE(SUM(is_eligible),0) eligible, COALESCE(SUM(face_encoding IS NOT NULL),0) face_registered,
-            COALESCE(SUM(has_voted),0) voted, COALESCE(SUM(is_eligible AND NOT has_voted),0) remaining, COALESCE(SUM(constituency_id IS NULL),0) no_constituency FROM voters`).then(([x]) => [x]);
+        // Only face-enrolled voter rows count as completed registrations. Details/OTP-only attempts remain pending.
+        const [[v]] = await db.query(`SELECT
+            COALESCE(SUM(face_encoding IS NOT NULL),0) registered,
+            COALESCE(SUM(face_encoding IS NOT NULL AND is_eligible),0) eligible,
+            COALESCE(SUM(face_encoding IS NOT NULL),0) face_registered,
+            COALESCE(SUM(face_encoding IS NOT NULL AND has_voted),0) voted,
+            COALESCE(SUM(face_encoding IS NOT NULL AND is_eligible AND NOT has_voted),0) remaining,
+            COALESCE(SUM(face_encoding IS NOT NULL AND constituency_id IS NULL),0) no_constituency
+            FROM voters`).then(([x]) => [x]);
         const t = await tally();
         const [[c]] = await db.query(`SELECT COUNT(*) total, COALESCE(SUM(is_active),0) active, COALESCE(SUM(party_id IS NULL OR constituency_id IS NULL),0) unassigned FROM candidates`).then(([x]) => [x]);
         const [candidateCountsByParty] = await db.query(`SELECT COALESCE(p.party_id, 0) party_id, COALESCE(p.name, 'Unassigned') party_name, COUNT(*) candidates,
