@@ -34,7 +34,6 @@ export default function Register() {
   const busy = useRef(false)                       // blocks double submissions even before React re-renders
   const [step, setStep] = useState(1)              // 1 details · 2 identity · 3 face · 4 done
   const [identityOn, setIdentityOn] = useState(true)
-  const [registrationLivenessRequired, setRegistrationLivenessRequired] = useState(true)
   const [idvInfo, setIdvInfo] = useState(null)
   const [form, setForm] = useState(EMPTY)
   const [errors, setErrors] = useState({})         // { field: translated message }
@@ -49,9 +48,6 @@ export default function Register() {
   const [cameraReady, setCameraReady] = useState(false)
   const [camError, setCamError] = useState(false)
   const [faceStatus, setFaceStatus] = useState('')
-  const [livenessToken, setLivenessToken] = useState('')
-  const [livenessFrame, setLivenessFrame] = useState('')
-  const [activeChallenge, setActiveChallenge] = useState('')
   // India master data for the ballot: state/UT, then that state's constituencies (public, read-only endpoints)
   const [states, setStates] = useState([])
   const [consts, setConsts] = useState([])
@@ -62,7 +58,7 @@ export default function Register() {
   const say = (type, text) => setMsg(text ? { type, text } : null)
   const clearErr = f => setErrors(p => (p[f] ? { ...p, [f]: undefined } : p))
 
-  useEffect(() => { axios.get(`${API}/config`).then(r => { setIdentityOn(r.data.identity.mode === 'required'); setIdvInfo(r.data.identity); setRegistrationLivenessRequired(r.data.registration_liveness_required !== false) }).catch(() => {}) }, [])
+  useEffect(() => { axios.get(`${API}/config`).then(r => { setIdentityOn(r.data.identity.mode === 'required'); setIdvInfo(r.data.identity) }).catch(() => {}) }, [])
   useEffect(() => { axios.get(`${API}/geo/states`).then(r => setStates(r.data)).catch(() => setGeoErr(true)) }, [])
   useEffect(() => {
     if (!form.state_id) return
@@ -124,44 +120,8 @@ export default function Register() {
     say('success', t('idv.verified')); setStep(3)
   }
 
-  // ---- face step
-  const runRegistrationLiveness = async () => {
-    if (busy.current) return
-    if (!cameraReady) return say('error', t('face.waiting'))
-    setLivenessToken(''); setLivenessFrame(''); setActiveChallenge('')
-    const r = await run('Starting live-face check...', async () => {
-      const tok = regToken.get()
-      const challengeRes = await axios.post(`${API}/voters/register-liveness-challenge`, {}, bearer(tok))
-      const { challenge_token: challengeToken, actions, frame_count: frameCount } = challengeRes.data
-      const action = actions?.[0]
-      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['blink', 'turn_left', 'turn_right'].includes(action) || ![16, 24].includes(frameCount))
-        throw new Error('The live-face challenge could not be started. Please retry.')
-      const frames = []
-      const captureFrame = () => {
-        const shot = webcamRef.current?.getScreenshot()
-        if (!shot) throw new Error('The camera frame could not be captured. Check camera access and retry.')
-        frames.push(shot.split(',')[1])
-      }
-      captureFrame(); await delay(100); captureFrame()
-      setActiveChallenge(action)
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      for (let i = 0; i < frameCount - 4; i += 1) { await delay(240); captureFrame() }
-      await delay(200); captureFrame(); await delay(100); captureFrame()
-      const liveRes = await axios.post(`${API}/voters/check-registration-liveness`, { challenge_token: challengeToken, frames }, { ...bearer(tok), timeout: 90000 })
-      const idx = liveRes.data?.identity_frame_index
-      if (!liveRes.data?.success || !liveRes.data?.liveness_token || !Number.isInteger(idx) || !frames[idx])
-        throw new Error(liveRes.data?.message || 'Live-face verification failed. Please try again.')
-      return { data: { ...liveRes.data, identity_frame: frames[idx] } }
-    })
-    setActiveChallenge('')
-    if (!r || r.error) return
-    setLivenessToken(r.data.liveness_token)
-    setLivenessFrame(r.data.identity_frame)
-    say('success', 'Live-face verification passed. Now capture 3–5 face images.')
-  }
-
+  // ---- face step: registration captures start directly; login retains liveness verification.
   const capture = useCallback(async () => {
-    if (registrationLivenessRequired && !livenessToken) return say('error', 'Complete the live-face challenge before capturing registration images.')
     if (busy.current) return
     if (images.length >= MAX_IMAGES) return
     const shot = webcamRef.current?.getScreenshot()
@@ -171,18 +131,15 @@ export default function Register() {
     if (!r) return
     if (r.error) return setFaceStatus(r.error.message)
     setImages(p => [...p, b64]); setFaceStatus(t('face.detected')); say('success', t('face.accepted', { n: images.length + 1 }))
-  }, [images, t, livenessToken, registrationLivenessRequired])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [images, t])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitFace = async () => {
     if (images.length < MIN_IMAGES) return say('error', t('face.needMore', { min: MIN_IMAGES }))
-    const payload = registrationLivenessRequired
-      ? { liveness_token: livenessToken, liveness_frame: livenessFrame, images }
-      : { images }
-    const r = await run(t('reg.processing'), () => axios.post(`${API}/voters/register-face`, payload, bearer(regToken.get())))
+    const r = await run(t('reg.processing'), () => axios.post(`${API}/voters/register-face`, { images }, bearer(regToken.get())))
     if (!r) return
     setImages([])                                   // captures are never kept after a try
-    if (r.error) { setLivenessToken(''); setLivenessFrame(''); if (r.error.code === 'REG_SESSION') setStep(1); return }
-    regToken.clear(); setLivenessToken(''); setLivenessFrame(''); say(null); setStep(4)
+    if (r.error) { if (r.error.code === 'REG_SESSION') setStep(1); return }
+    regToken.clear(); say(null); setStep(4)
   }
 
   const field = (f, label, type = 'text', extra = {}) => (
@@ -281,9 +238,8 @@ export default function Register() {
               {['face.i1', 'face.i2', 'face.i3', 'face.i4', 'face.i5'].map(k => <li key={k}>{t(k)}</li>)}
               <li>{t('face.i6', { min: MIN_IMAGES })}</li>
             </ol>
-            <p className="hint">{registrationLivenessRequired ? (livenessToken ? 'Live-face check passed.' : 'Complete the live-face check first.') : 'Demo enrollment: capture starts directly. Liveness verification is still required when logging in.'}</p>
+            <p className="hint">Capture 3–5 face images. Liveness verification remains required when logging in.</p>
             <p className="hint">Your voter ID will be generated automatically.</p>
-            {registrationLivenessRequired && activeChallenge && <p className="prompt">{activeChallenge === 'blink' ? 'Blink now.' : activeChallenge === 'turn_left' ? 'Turn your head slightly left now.' : 'Turn your head slightly right now.'}</p>}
             <p className="prompt">{images.length < MAX_IMAGES ? t(`face.prompt${images.length + 1}`) : t('face.allCaptured')}</p>
             <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg" screenshotQuality={0.92} videoConstraints={VIDEO}
               className="webcam" style={{ width: 320, maxWidth: '100%' }}
@@ -292,8 +248,7 @@ export default function Register() {
             <div className="dots">{Array.from({ length: MAX_IMAGES }).map((_, i) => <div key={i} className={`dot ${i < images.length ? 'filled' : ''}`} />)}</div>
             <p className="hint">{t('face.progress', { n: images.length, min: MIN_IMAGES, max: MAX_IMAGES })}</p>
             <div className="btn-row">
-              {registrationLivenessRequired && !livenessToken && <button type="button" className="btn primary" onClick={runRegistrationLiveness} disabled={!!loading || !cameraReady}>Start live-face check</button>}
-              <button type="button" className="btn danger" onClick={capture} disabled={!!loading || !cameraReady || (registrationLivenessRequired && !livenessToken) || images.length >= MAX_IMAGES}>📸 {t('face.capture')}</button>
+              <button type="button" className="btn danger" onClick={capture} disabled={!!loading || !cameraReady || images.length >= MAX_IMAGES}>📸 {t('face.capture')}</button>
               <button type="button" className="btn secondary" onClick={() => { setImages([]); setFaceStatus(''); say(null) }} disabled={!!loading || images.length === 0}>↺ {t('face.retake')}</button>
               <button type="button" className="btn primary" onClick={submitFace} disabled={!!loading || images.length < MIN_IMAGES}>{loading === t('reg.processing') ? t('reg.processing') : t('face.register')}</button>
               <button type="button" className="btn secondary" disabled={!!loading} onClick={() => { say(null); setStep(identityOn ? 2 : 1) }}>{t('common.back')}</button>
