@@ -166,9 +166,9 @@ router.post('/check-registration-liveness', rateLimit('check-registration-livene
 // Live per-frame feedback during capture. Nothing is stored.
 router.post('/check-face', rateLimit('check-face', 240, 10 * 60 * 1000), async (req, res) => {
     try {
-        const { image } = req.body || {};
+        const { image, allow_registration_pose } = req.body || {};
         if (!validImage(image)) return fail(res, 400, "Invalid image", { code: 'INVALID_IMAGE' });
-        const r = await ai.post('/check-face', { image });
+        const r = await ai.post('/check-face', { image, allow_registration_pose: allow_registration_pose === true });
         res.status(r.status).json(r.data);
     } catch (e) {
         fail(res, 503, "Face service is unavailable. Please try again shortly.");
