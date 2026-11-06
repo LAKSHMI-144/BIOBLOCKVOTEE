@@ -14,7 +14,7 @@ from face_module import FaceError, decode_image, get_engine
 log = logging.getLogger("blockbiovote-ai.liveness")
 
 FRAME_COUNT = 16  # Full registration challenge.
-FAST_AUTH_FRAME_COUNT = 8  # Shorter prototype login challenge.
+FAST_AUTH_FRAME_COUNT = 12  # Shorter prototype login challenge.
 SUPPORTED_FRAME_COUNTS = {FAST_AUTH_FRAME_COUNT, FRAME_COUNT, 24}
 MAX_FRAME_CHARS = 512 * 1024
 MAX_TOTAL_FRAME_CHARS = 8 * 1024 * 1024
