@@ -179,23 +179,23 @@ router.post('/check-face', rateLimit('check-face', 240, 10 * 60 * 1000), async (
 // Images are forwarded to the AI service, turned into an encrypted embedding and discarded.
 router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), requireReg, async (req, res) => {
     try {
-        const body = req.body || {};
         const voter_id = req.regVoter;
-        if (body.voter_id && String(body.voter_id).trim().toUpperCase() !== voter_id) return fail(res, 403, 'This registration session belongs to a different Voter ID.', { code: 'ID_MISMATCH' });
-        const images = body.images;
-        const livenessTokenHash = liveness.hashChallengeToken(body.liveness_token);
-        if (!livenessTokenHash || !validImage(body.liveness_frame)) return fail(res, 400, 'Complete the live-face challenge before registering your face.', { code: 'INVALID_LIVENESS_DATA' });
-        if (!Array.isArray(images) || images.length < MIN_IMAGES || images.length > MAX_IMAGES || !images.every(validImage))
-            return fail(res, 400, `Send ${MIN_IMAGES}-${MAX_IMAGES} valid face images`, { code: 'INVALID_IMAGE' });
+        const images = req.body?.images;
+        if (!Array.isArray(images) || images.length !== 3 || !images.every(validImage))
+            return fail(res, 400, 'Capture exactly three valid face views: front, left and right.', { code: 'INVALID_IMAGE' });
 
         const [voter] = await db.query("SELECT voter_id FROM voters WHERE voter_id = ?", [voter_id]);
         if (voter.length === 0) return fail(res, 404, "Register voter details first");
         if (identity.mode() === 'required' && !(await identity.isVerified(voter_id)))
             return fail(res, 403, 'Verify the demo OTP before registering your face.', { code: 'IDENTITY_REQUIRED' });
-        const live = await liveness.consumeLivenessPass(db, livenessTokenHash, voter_id, body.liveness_frame);
-        if (!live) return fail(res, 403, 'Your live-face check expired or did not match. Start the challenge again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
-        const r = await ai.post('/register-face', { voter_id, images });
-        if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); await audit(voter_id, 'FACE_REGISTRATION_FAILED:AI_MISCONFIGURED'); return fail(res, 503, "Face service is misconfigured. Ask the administrator to check INTERNAL_API_KEY in server/.env and python_ai/.env.", { code: 'AI_MISCONFIGURED' }); }
+
+        // Python performs face detection, image-quality checks, same-person consistency and duplicate-face checks.
+        const r = await ai.post('/register-face', { voter_id, images }, { timeout: 90000 });
+        if (r.status === 403) {
+            console.error('AI service rejected INTERNAL_API_KEY – check both .env files');
+            await audit(voter_id, 'FACE_REGISTRATION_FAILED:AI_MISCONFIGURED');
+            return fail(res, 503, "Face service is misconfigured. Ask the administrator to check INTERNAL_API_KEY in server/.env and python_ai/.env.", { code: 'AI_MISCONFIGURED' });
+        }
         if (r.data && r.data.success) await audit(voter_id, 'FACE_REGISTERED');
         else if (r.data && r.data.code) await audit(voter_id, `FACE_REGISTRATION_FAILED:${r.data.code}`);
         res.status(r.status).json(r.data);
@@ -205,7 +205,6 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
         fail(res, 503, "Face service is unavailable. Please try again shortly.");
     }
 });
-
 router.post('/liveness-challenge', rateLimit('liveness-challenge', 20, 10 * 60 * 1000), async (req, res) => {
     const voterId = String(req.body?.voter_id ?? '').trim().toUpperCase();
     if (!VOTER_ID_RE.test(voterId))
