@@ -352,22 +352,22 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
         );
         if (!voterRows.length || !voterRows[0].has_face)
             return fail(res, 404, 'Voter ID or face registration was not found.', {
-                code: 'VOTER_NOT_FOUND', liveness_passed: true
+                code: 'VOTER_NOT_FOUND', liveness_passed: livenessPassed
             });
         if (!voterRows[0].is_eligible)
             return fail(res, 403, 'This voter is not eligible to vote.', {
-                code: 'NOT_ELIGIBLE', liveness_passed: true
+                code: 'NOT_ELIGIBLE', liveness_passed: livenessPassed
             });
         if (voterRows[0].has_voted)
             return fail(res, 409, 'This voter has already voted.', {
-                code: 'ALREADY_VOTED', liveness_passed: true
+                code: 'ALREADY_VOTED', liveness_passed: livenessPassed
             });
 
         const aiRes = await ai.post('/authenticate', { image });
         if (aiRes.status >= 500 || aiRes.status === 403) {
             await audit(typed, 'AUTH_FAILED:AI_ERROR');
             return fail(res, 503, 'Authentication service error. Please try again.', {
-                code: 'AI_ERROR', liveness_passed: true
+                code: 'AI_ERROR', liveness_passed: livenessPassed
             });
         }
         if (!aiRes.data.success) {
@@ -375,14 +375,14 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
             return res.status(403).json({
                 ...aiRes.data,
                 code: aiRes.data.code || 'IDENTITY_FAILED',
-                liveness_passed: true
+                liveness_passed: livenessPassed
             });
         }
         const { voter_id, voter_name, has_voted } = aiRes.data;
         if (typed !== String(voter_id).toUpperCase()) {
             await audit(voter_id, 'AUTH_ID_MISMATCH');
             return res.status(403).json({
-                success: false, code: 'ID_MISMATCH', liveness_passed: true,
+                success: false, code: 'ID_MISMATCH', liveness_passed: livenessPassed,
                 message: 'The verified face does not match the Voter ID you entered.'
             });
         }
@@ -390,7 +390,7 @@ router.post('/authenticate', rateLimit('authenticate', 30, 10 * 60 * 1000), asyn
             await audit(voter_id, 'DUPLICATE_ATTEMPT');
             return res.status(409).json({
                 success: false, already_voted: true, code: 'ALREADY_VOTED',
-                liveness_passed: true, message: `${voter_name} has already voted!`
+                liveness_passed: livenessPassed, message: `${voter_name} has already voted!`
             });
         }
         if (!FACE_ONLY_DEMO && !liveness.isVerificationComplete(livenessPassed, aiRes.data.success))
