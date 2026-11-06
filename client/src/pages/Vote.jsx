@@ -34,9 +34,6 @@ export default function Vote({ mode = 'auth' }) {
   const [faceOnlyDemo, setFaceOnlyDemo] = useState(false)
   const [authConfigLoaded, setAuthConfigLoaded] = useState(mode !== 'auth')
   const [authConfigError, setAuthConfigError] = useState(false)
-  const [faceOnlyDemo, setFaceOnlyDemo] = useState(false)
-  const [authConfigLoaded, setAuthConfigLoaded] = useState(mode !== 'auth')
-  const [authConfigError, setAuthConfigError] = useState(false)
 
   useEffect(() => () => {
     const stream = streamRef.current
@@ -57,14 +54,6 @@ export default function Vote({ mode = 'auth' }) {
   }, [mode])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const fail = (text) => setMsg({ type: 'error', text })
-
-  useEffect(() => {
-    if (mode !== 'auth') return
-    axios.get(`${API}/config`)
-      .then(response => setFaceOnlyDemo(response.data?.face_only_demo === true))
-      .catch(() => setAuthConfigError(true))
-      .finally(() => setAuthConfigLoaded(true))
-  }, [mode])
 
   useEffect(() => {
     if (mode !== 'auth') return
