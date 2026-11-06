@@ -120,7 +120,7 @@ export default function AdminDashboard() {
               </div>
             </section>
             <section className="bb-panel">
-              <div className="bb-panel-header"><span>Lok Sabha seat tally</span><small>{d.parliamentary.seats_counted} / {d.scope.parliamentary_constituencies} seats counted</small></div>
+              <div className="bb-panel-header"><span>Lok Sabha seat tally</span></div>
               {d.parliamentary.seats_counted === 0 ? (
                 <div className="bb-empty-panel">
                   <h3>No constituency results yet</h3>
@@ -143,7 +143,7 @@ export default function AdminDashboard() {
                   </div>
                 </>
               )}
-              <p className="bb-sub" style={{ marginTop: 12 }}>Majority mark: {d.parliamentary.majority_mark} of {d.scope.parliamentary_constituencies} seats. This is a PM-formation simulation, not a direct PM ballot.</p>
+              <p className="bb-sub" style={{ marginTop: 12 }}>Parliamentary majority threshold: {d.parliamentary.majority_mark} seats.</p>
             </section>
           </div>
         </>
