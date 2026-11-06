@@ -14,8 +14,8 @@ from face_module import FaceError, decode_image, get_engine
 log = logging.getLogger("blockbiovote-ai.liveness")
 
 FRAME_COUNT = 16  # Full registration challenge.
-FAST_AUTH_FRAME_COUNT = 12  # Shorter prototype login challenge.
-SUPPORTED_FRAME_COUNTS = {FAST_AUTH_FRAME_COUNT, FRAME_COUNT, 24}
+FAST_AUTH_FRAME_COUNT = 8  # Fast prototype login challenge.
+SUPPORTED_FRAME_COUNTS = {FAST_AUTH_FRAME_COUNT, 12, FRAME_COUNT, 24}
 MAX_FRAME_CHARS = 512 * 1024
 MAX_TOTAL_FRAME_CHARS = 8 * 1024 * 1024
 MIN_LIVE_SCORE = 0.60
@@ -132,15 +132,22 @@ def _score_live(session, image, landmarks):
 
 
 def _head_turn_measure(points):
+    # SCRFD supplies five keypoints in order: left eye, right eye, nose, mouth corners.
+    # These are sufficient for the lightweight normalized yaw proxy used by this challenge.
     landmarks = np.asarray(points, dtype=np.float64)
-    eye_midpoint = (landmarks[36, :2] + landmarks[45, :2]) / 2
-    eye_width = float(np.linalg.norm(landmarks[36, :2] - landmarks[45, :2]))
-    if eye_width < 1:
+    if landmarks.ndim != 2 or landmarks.shape[0] < 3 or landmarks.shape[1] < 2:
         raise LivenessError(
             "LANDMARKS_UNAVAILABLE",
             "Face landmarks could not be read. Face the camera and try again.",
         )
-    return float((landmarks[30, 0] - eye_midpoint[0]) / eye_width)
+    eye_midpoint = (landmarks[0, :2] + landmarks[1, :2]) / 2
+    eye_width = float(np.linalg.norm(landmarks[0, :2] - landmarks[1, :2]))
+    if eye_width < 1 or not np.isfinite(landmarks[:3, :2]).all():
+        raise LivenessError(
+            "LANDMARKS_UNAVAILABLE",
+            "Face landmarks could not be read. Face the camera and try again.",
+        )
+    return float((landmarks[2, 0] - eye_midpoint[0]) / eye_width)
 
 
 def _cosine(left, right):
@@ -151,7 +158,8 @@ def _cosine(left, right):
 
 
 def _validate_face_observation(face):
-    landmarks = face.get("landmark_3d_68")
+    # Reuse SCRFD's five detection keypoints; avoid a separate 68-landmark model pass.
+    landmarks = getattr(face, "kps", None)
     if face.det_score < 0.60:
         raise LivenessError(
             "LOW_CONFIDENCE",
@@ -160,7 +168,7 @@ def _validate_face_observation(face):
     if (
         not isinstance(landmarks, np.ndarray)
         or landmarks.ndim != 2
-        or landmarks.shape[0] < 68
+        or landmarks.shape[0] < 5
         or landmarks.shape[1] < 2
         or not np.isfinite(landmarks[:, :2]).all()
     ):
@@ -281,13 +289,17 @@ def verify_liveness(frames, actions):
 
     observations = []
     frame_count = len(frames)
-    embedding_indices = {
-        0,
-        frame_count // 4,
-        frame_count // 2,
-        (frame_count * 3) // 4,
-        frame_count - 1,
-    }
+    embedding_indices = (
+        {0, frame_count // 2, frame_count - 1}
+        if frame_count == FAST_AUTH_FRAME_COUNT
+        else {
+            0,
+            frame_count // 4,
+            frame_count // 2,
+            (frame_count * 3) // 4,
+            frame_count - 1,
+        }
+    )
     for index, encoded in enumerate(frames):
         try:
             image = decode_image(encoded)
@@ -311,7 +323,6 @@ def verify_liveness(frames, actions):
             kps=keypoints[0],
             det_score=bboxes[0, 4],
         )
-        engine.models["landmark_3d_68"].get(image, face)
         landmarks = _validate_face_observation(face)
         score = _score_live(anti_spoof, image, face.kps)
         embedding = None
