@@ -47,11 +47,11 @@ class LivenessSequenceTests(unittest.TestCase):
     def test_single_blink_challenge_passes_with_open_closed_open_frames(self):
         liveness.validate_observations(observations(), ["blink"])
 
-    def test_fast_8_frame_login_challenge_passes_blink(self):
-        liveness.validate_observations(observations(frame_count=8), ["blink"])
+    def test_fast_12_frame_login_challenge_passes_blink(self):
+        liveness.validate_observations(observations(frame_count=12), ["blink"])
 
-    def test_fast_8_frame_login_challenge_passes_head_turn(self):
-        rows = observations(blink=False, frame_count=8)
+    def test_fast_12_frame_login_challenge_passes_head_turn(self):
+        rows = observations(blink=False, frame_count=12)
         for index in (2, 3, 4):
             rows[index]["head_turn"] = -0.12
         liveness.validate_observations(rows, ["turn_right"])
