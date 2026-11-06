@@ -24,8 +24,8 @@ test('challenges choose one random supported action and use unique unguessable t
     }
     assert.equal(new Set(challenges.map(challenge => challenge.token)).size, challenges.length);
     assert.ok(new Set(challenges.map(challenge => challenge.actions[0])).size > 1);
-    const fastLogin = createChallenge(8);
-    assert.equal(fastLogin.frame_count, 8);
+    const fastLogin = createChallenge(12);
+    assert.equal(fastLogin.frame_count, 12);
 });
 
 test('challenge hashes cannot be substituted by malformed tokens', () => {
@@ -38,8 +38,8 @@ test('challenge hashes cannot be substituted by malformed tokens', () => {
 test('liveness frame payload has a strict count and per-frame/aggregate limits', () => {
     const frame = Buffer.alloc(100, 1).toString('base64');
     assert.equal(validateFrames(Array(FRAME_COUNT).fill(frame)), true);
-    assert.equal(validateFrames(Array(8).fill(frame)), true);
-    assert.equal(validateFrames(Array(8).fill(frame), 8), true);
+    assert.equal(validateFrames(Array(12).fill(frame)), true);
+    assert.equal(validateFrames(Array(8).fill(frame), 12), true);
     assert.equal(validateFrames(Array(8).fill(frame), FRAME_COUNT), false);
     assert.equal(validateFrames(Array(FRAME_COUNT).fill(frame), FRAME_COUNT), true);
     assert.equal(validateFrames(Array(24).fill(frame)), true);
