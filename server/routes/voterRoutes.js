@@ -147,10 +147,12 @@ router.post('/check-registration-liveness', rateLimit('check-registration-livene
     try {
         const actions = await liveness.consumeChallenge(db, tokenHash, req.regVoter);
         if (!actions) return fail(res, 401, 'The camera challenge expired or was already used. Start again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
+        livenessStage = 'call Python /liveness-check';
         const liveRes = await ai.post('/liveness-check', { frames, actions }, { timeout: 90000 });
         const identityFrameIndex = liveRes.data?.identity_frame_index;
         if (!liveRes.data?.success || !liveness.isIdentityFrameIndex(identityFrameIndex, frames.length))
             return res.status(403).json({ success: false, code: liveRes.data?.code || 'LIVENESS_FAILED', message: liveRes.data?.message || 'The camera challenge was not passed.' });
+        livenessStage = 'save one-use liveness proof in MySQL';
         const verificationToken = liveness.createVerificationToken();
         const saved = await liveness.storeLivenessPass(
             db, tokenHash, req.regVoter,
@@ -261,6 +263,7 @@ router.post('/check-liveness', rateLimit('check-liveness', 20, 10 * 60 * 1000), 
     if (!tokenHash || !liveness.validateFrames(frames, FAST_AUTH_FRAME_COUNT))
         return fail(res, 400, 'The camera challenge data is invalid. Start again.', { code: 'INVALID_LIVENESS_DATA' });
 
+    let livenessStage = 'consume one-time challenge from MySQL';
     try {
         const actions = await liveness.consumeChallenge(db, tokenHash, typed);
         if (!actions) {
@@ -305,7 +308,14 @@ router.post('/check-liveness', rateLimit('check-liveness', 20, 10 * 60 * 1000), 
             identity_frame_index: identityFrameIndex
         });
     } catch (e) {
-        console.error('liveness verification error:', e.message);
+        console.error('liveness verification error:', {
+            stage: livenessStage,
+            code: e.code || null,
+            message: e.message,
+            python_status: e.response?.status || null,
+            python_code: e.response?.data?.code || null,
+            python_message: e.response?.data?.message || null
+        });
         await audit(typed, 'AUTH_FAILED:LIVENESS_UNAVAILABLE');
         return fail(res, 503, 'Liveness verification is unavailable. Check the camera service and try again.', {
             code: 'LIVENESS_SERVICE_ERROR'
