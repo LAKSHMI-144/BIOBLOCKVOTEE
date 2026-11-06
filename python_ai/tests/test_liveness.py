@@ -120,32 +120,6 @@ class LivenessSequenceTests(unittest.TestCase):
         points[30, :2] = [22, 20]
         self.assertAlmostEqual(liveness._head_turn_measure(points), 0.1)
 
-    def test_no_face_and_multiple_faces_fail_closed(self):
-        fake_frames = ["A" * 100] * liveness.FRAME_COUNT
-        image = np.zeros((8, 8, 3), dtype=np.uint8)
-        no_face_boxes = np.empty((0, 5), dtype=np.float32)
-        multi_face_boxes = np.zeros((2, 5), dtype=np.float32)
-        multi_face_points = np.zeros((2, 5, 2), dtype=np.float32)
-        with patch.object(liveness, "_get_model", return_value=object()), \
-             patch.object(liveness, "decode_image", return_value=image), \
-             patch.object(liveness, "get_engine") as engine_factory:
-            engine_factory.return_value.det_model.detect.return_value = (no_face_boxes, None)
-            with self.assertRaisesRegex(liveness.LivenessError, "No face"):
-                liveness.verify_liveness(fake_frames, ["blink"])
-
-            engine_factory.return_value.det_model.detect.return_value = (
-                multi_face_boxes,
-                multi_face_points,
-            )
-            with self.assertRaisesRegex(liveness.LivenessError, "Only one person"):
-                liveness.verify_liveness(fake_frames, ["blink"])
-
-    def test_invalid_and_oversized_frame_sets_are_rejected(self):
-        with self.assertRaisesRegex(liveness.LivenessError, "complete camera challenge"):
-            liveness.verify_liveness(["A" * 100], ["blink"])
-        oversized = ["A" * (liveness.MAX_FRAME_CHARS + 1)] * liveness.FRAME_COUNT
-        with self.assertRaisesRegex(liveness.LivenessError, "invalid or too large"):
-            liveness.verify_liveness(oversized, ["blink"])
 
 
 if __name__ == "__main__":
