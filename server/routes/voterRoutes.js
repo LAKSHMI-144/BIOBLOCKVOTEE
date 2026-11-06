@@ -10,7 +10,7 @@ const liveness = require('../services/liveness');
 const { FRAME_COUNT, FAST_AUTH_FRAME_COUNT } = liveness;
 // Registration can skip its extra liveness challenge only in explicitly configured non-production demos.
 const REGISTRATION_LIVENESS_REQUIRED = process.env.NODE_ENV === 'production';
-const FACE_ONLY_DEMO = process.env.NODE_ENV !== 'production' && process.env.DEMO_FACE_ONLY === 'true';
+const FACE_ONLY_DEMO = process.env.NODE_ENV !== 'production' && process.env.DEMO_FACE_ONLY !== 'false';
 const requireAdmin = require('../middleware/requireAdmin');
 const rateLimit = require('../middleware/rateLimit');
 
@@ -202,7 +202,7 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
             const live = await liveness.consumeLivenessPass(db, livenessTokenHash, voter_id, body.liveness_frame);
             if (!live) return fail(res, 403, 'Your live-face check expired or did not match. Start the challenge again.', { code: 'LIVENESS_CHALLENGE_INVALID' });
         }
-        const r = await ai.post('/register-face', { voter_id, images });
+        const r = await ai.post('/register-face', { voter_id, images }, { timeout: 120000 });
         if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); await audit(voter_id, 'FACE_REGISTRATION_FAILED:AI_MISCONFIGURED'); return fail(res, 503, "Face service is misconfigured. Ask the administrator to check INTERNAL_API_KEY in server/.env and python_ai/.env.", { code: 'AI_MISCONFIGURED' }); }
         if (r.data && r.data.success === true && r.status === 200) {
             await audit(voter_id, 'FACE_REGISTERED');
@@ -211,9 +211,15 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
         if (r.data && r.data.code) await audit(voter_id, `FACE_REGISTRATION_FAILED:${r.data.code}`);
         return res.status(r.status).json(r.data);
     } catch (e) {
-        console.error('register-face error:', e.message);
+        console.error('register-face error:', {
+            message: e.message,
+            code: e.code || null,
+            ai_status: e.response?.status || null,
+            ai_code: e.response?.data?.code || null,
+            ai_message: e.response?.data?.message || null
+        });
         await audit(req.regVoter, 'FACE_REGISTRATION_FAILED:AI_UNAVAILABLE');
-        fail(res, 503, "Face service is unavailable. Please try again shortly.");
+        fail(res, 503, e.response?.data?.message || "Face service is unavailable. Please try again shortly.");
     }
 });
 
