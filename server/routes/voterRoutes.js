@@ -201,9 +201,12 @@ router.post('/register-face', rateLimit('register-face', 20, 15 * 60 * 1000), re
         }
         const r = await ai.post('/register-face', { voter_id, images });
         if (r.status === 403) { console.error('AI service rejected INTERNAL_API_KEY – check both .env files'); await audit(voter_id, 'FACE_REGISTRATION_FAILED:AI_MISCONFIGURED'); return fail(res, 503, "Face service is misconfigured. Ask the administrator to check INTERNAL_API_KEY in server/.env and python_ai/.env.", { code: 'AI_MISCONFIGURED' }); }
-        if (r.data && r.data.success) await audit(voter_id, 'FACE_REGISTERED');
-        else if (r.data && r.data.code) await audit(voter_id, `FACE_REGISTRATION_FAILED:${r.data.code}`);
-        res.status(r.status).json(r.data);
+        if (r.data && r.data.success === true && r.status === 200) {
+            await audit(voter_id, 'FACE_REGISTERED');
+            return res.status(200).json({ ...r.data, voter_id });
+        }
+        if (r.data && r.data.code) await audit(voter_id, `FACE_REGISTRATION_FAILED:${r.data.code}`);
+        return res.status(r.status).json(r.data);
     } catch (e) {
         console.error('register-face error:', e.message);
         await audit(req.regVoter, 'FACE_REGISTRATION_FAILED:AI_UNAVAILABLE');
