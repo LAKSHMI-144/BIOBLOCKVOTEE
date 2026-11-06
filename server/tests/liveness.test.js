@@ -15,7 +15,7 @@ const {
 
 test('challenges choose one random supported action and use unique unguessable tokens', () => {
     const challenges = Array.from({ length: 64 }, createChallenge);
-    const supportedActions = new Set(['blink', 'turn_left', 'turn_right']);
+    const supportedActions = new Set(['turn_left', 'look_straight']);
     for (const challenge of challenges) {
         assert.match(challenge.token, /^[a-f0-9]{64}$/);
         assert.equal(challenge.frame_count, FRAME_COUNT);
