@@ -137,9 +137,16 @@ export default function Register() {
     if (images.length < MIN_IMAGES) return say('error', t('face.needMore', { min: MIN_IMAGES }))
     const r = await run(t('reg.processing'), () => axios.post(`${API}/voters/register-face`, { images }, bearer(regToken.get())))
     if (!r) return
+    if (r.error) {
+      setImages([])
+      if (r.error.code === 'REG_SESSION') setStep(1)
+      return
+    }
+    if (r.data?.success !== true || r.data?.voter_id !== form.voter_id) {
+      return say('error', r.data?.message || 'Face registration could not be confirmed. Please retry.')
+    }
     setImages([])                                   // captures are never kept after a try
-    if (r.error) { if (r.error.code === 'REG_SESSION') setStep(1); return }
-    regToken.clear(); say(null); setStep(4)
+    regToken.clear(); say('success', 'Face registered successfully. Your Voter ID is ready.'); setStep(4)
   }
 
   const field = (f, label, type = 'text', extra = {}) => (
