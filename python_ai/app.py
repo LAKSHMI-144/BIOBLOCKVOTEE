@@ -13,7 +13,7 @@ load_dotenv()
 from blockchain import voting_blockchain  # noqa: E402
 from face_module import (FaceError, analyze_image, authenticate_face,  # noqa: E402
                          build_template, find_duplicate, get_engine)
-from liveness import LivenessError, verify_liveness  # noqa: E402
+from liveness import LivenessError, verify_liveness, warmup_liveness_model  # noqa: E402
 from security import check_config, encrypt_embedding  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
@@ -193,5 +193,8 @@ if __name__ == "__main__":
     check_config()
     log.info("Loading face models (first run downloads them, ~300 MB)...")
     get_engine()
+    log.info("Warming up presentation-attack detection model...")
+    warmup_liveness_model()
+    log.info("Face and liveness models are ready.")
     app.run(host="127.0.0.1", port=int(os.getenv("PORT", "5001")),
             debug=os.getenv("FLASK_DEBUG", "0") == "1")
