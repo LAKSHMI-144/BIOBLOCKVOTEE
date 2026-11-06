@@ -9,7 +9,7 @@ const identity = require('../services/identity');
 const liveness = require('../services/liveness');
 const { FRAME_COUNT, FAST_AUTH_FRAME_COUNT } = liveness;
 // Registration can skip its extra liveness challenge only in explicitly configured non-production demos.
-const REGISTRATION_LIVENESS_REQUIRED = process.env.NODE_ENV === 'production' || process.env.REGISTRATION_LIVENESS_REQUIRED === 'true';
+const REGISTRATION_LIVENESS_REQUIRED = process.env.NODE_ENV === 'production';
 const requireAdmin = require('../middleware/requireAdmin');
 const rateLimit = require('../middleware/rateLimit');
 
