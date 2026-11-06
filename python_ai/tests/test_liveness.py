@@ -23,32 +23,32 @@ def observations(frame_count=liveness.FRAME_COUNT):
 
 class LivenessSequenceTests(unittest.TestCase):
     def test_face_landmarks_are_accepted_without_optional_pose_output(self):
-        landmarks = np.ones((68, 3), dtype=np.float32)
-        face = SimpleNamespace(det_score=0.9, get=lambda _name: landmarks)
+        landmarks = np.ones((5, 2), dtype=np.float32)
+        face = SimpleNamespace(det_score=0.9, kps=landmarks)
         self.assertIs(liveness._validate_face_observation(face), landmarks)
 
     def test_face_quality_failures_are_reported_separately(self):
         landmarks = np.ones((68, 3), dtype=np.float32)
         with self.assertRaisesRegex(liveness.LivenessError, "Move closer"):
             liveness._validate_face_observation(
-                SimpleNamespace(det_score=0.5, get=lambda _name: landmarks)
+                SimpleNamespace(det_score=0.5, kps=landmarks)
             )
         with self.assertRaisesRegex(liveness.LivenessError, "landmarks could not be read"):
             liveness._validate_face_observation(
-                SimpleNamespace(det_score=0.9, get=lambda _name: None)
+                SimpleNamespace(det_score=0.9, kps=None)
             )
 
-    def test_fast_12_frame_login_challenge_passes_left_turn(self):
-        rows = observations(frame_count=12)
+    def test_fast_8_frame_login_challenge_passes_left_turn(self):
+        rows = observations(frame_count=liveness.FAST_AUTH_FRAME_COUNT)
         for index in (3, 4, 5):
             rows[index]["head_turn"] = 0.12
         liveness.validate_observations(rows, ["turn_left"])
 
-    def test_fast_12_frame_login_challenge_passes_look_straight(self):
-        liveness.validate_observations(observations(frame_count=12), ["look_straight"])
+    def test_fast_8_frame_login_challenge_passes_look_straight(self):
+        liveness.validate_observations(observations(frame_count=liveness.FAST_AUTH_FRAME_COUNT), ["look_straight"])
 
     def test_look_straight_rejects_off_center_head_pose(self):
-        rows = observations(frame_count=12)
+        rows = observations(frame_count=liveness.FAST_AUTH_FRAME_COUNT)
         for index in (2, 3, 4):
             rows[index]["head_turn"] = 0.20
         with self.assertRaisesRegex(liveness.LivenessError, "Face the camera directly"):
@@ -113,10 +113,10 @@ class LivenessSequenceTests(unittest.TestCase):
             liveness.verify_liveness(oversized, ["look_straight"])
 
     def test_head_turn_measure_is_normalized_to_eye_width(self):
-        points = np.zeros((68, 3), dtype=np.float32)
-        points[36, :2] = [10, 10]
-        points[45, :2] = [30, 10]
-        points[30, :2] = [22, 20]
+        points = np.zeros((5, 2), dtype=np.float32)
+        points[0] = [10, 10]
+        points[1] = [30, 10]
+        points[2] = [22, 20]
         self.assertAlmostEqual(liveness._head_turn_measure(points), 0.1)
 
 
