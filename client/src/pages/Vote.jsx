@@ -89,7 +89,7 @@ export default function Vote({ mode = 'auth' }) {
       const challengeRes = await axios.post(`${API}/voters/liveness-challenge`, { voter_id: pendingId })
       const { challenge_token: challengeToken, actions, frame_count: frameCount } = challengeRes.data
       const challengeAction = actions?.[0]
-      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['blink', 'turn_left', 'turn_right'].includes(challengeAction) || ![16, 24].includes(frameCount)) {
+      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['blink', 'turn_left', 'turn_right'].includes(challengeAction) || ![8, 16, 24].includes(frameCount)) {
         const error = new Error(t('auth.challengeInvalid'))
         error.code = 'CHALLENGE_INVALID'
         throw error
@@ -111,7 +111,7 @@ export default function Vote({ mode = 'auth' }) {
       setActiveChallenge(challengeAction)
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
       for (let frame = 0; frame < frameCount - 4; frame += 1) {
-        await delay(240)
+        await delay(frameCount === 8 ? 250 : 240)
         capture()
       }
       await delay(200)
@@ -128,7 +128,7 @@ export default function Vote({ mode = 'auth' }) {
         challenge_token: challengeToken,
         frames,
         voter_id: pendingId
-      })
+      }, { timeout: 100000 })
       const identityFrameIndex = liveRes.data?.identity_frame_index
       if (
         !liveRes.data?.success
