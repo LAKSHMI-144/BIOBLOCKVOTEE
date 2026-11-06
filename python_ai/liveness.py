@@ -131,24 +131,6 @@ def _score_live(session, image, landmarks):
     return score
 
 
-def _eye_ratio(points, start):
-    eye = np.asarray(points[start:start + 6, :2], dtype=np.float64)
-    horizontal = np.linalg.norm(eye[0] - eye[3])
-    if horizontal < 1:
-        raise LivenessError(
-            "LANDMARKS_UNAVAILABLE",
-            "Eye landmarks could not be read. Improve the lighting and face the camera.",
-        )
-    return float(
-        (np.linalg.norm(eye[1] - eye[5]) + np.linalg.norm(eye[2] - eye[4]))
-        / (2 * horizontal)
-    )
-
-
-def _eye_aspect_ratio(points):
-    return (_eye_ratio(points, 36) + _eye_ratio(points, 42)) / 2
-
-
 def _head_turn_measure(points):
     landmarks = np.asarray(points, dtype=np.float64)
     eye_midpoint = (landmarks[36, :2] + landmarks[45, :2]) / 2
@@ -208,10 +190,9 @@ def validate_observations(observations, actions):
         embedding = item["embedding"]
         if (
             not np.isfinite(
-                [item["live_score"], item["eye_ratio"], item["head_turn"]]
+                [item["live_score"], item["head_turn"]]
             ).all()
             or not 0 <= item["live_score"] <= 1
-            or item["eye_ratio"] < 0
             or (embedding is not None and not np.isfinite(embedding).all())
         ):
             raise LivenessError("INVALID_FRAMES", "The camera measurements are invalid.")
@@ -339,7 +320,6 @@ def verify_liveness(frames, actions):
             embedding = face.normed_embedding
         observations.append({
             "live_score": score,
-            "eye_ratio": _eye_aspect_ratio(landmarks),
             "head_turn": _head_turn_measure(landmarks),
             "embedding": embedding,
         })
