@@ -89,7 +89,7 @@ export default function Vote({ mode = 'auth' }) {
       const challengeRes = await axios.post(`${API}/voters/liveness-challenge`, { voter_id: pendingId })
       const { challenge_token: challengeToken, actions, frame_count: frameCount } = challengeRes.data
       const challengeAction = actions?.[0]
-      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['turn_left', 'look_straight'].includes(challengeAction) || ![12, 16, 24].includes(frameCount)) {
+      if (!challengeToken || !Array.isArray(actions) || actions.length !== 1 || !['turn_left', 'look_straight'].includes(challengeAction) || ![8, 12, 16, 24].includes(frameCount)) {
         const error = new Error(t('auth.challengeInvalid'))
         error.code = 'CHALLENGE_INVALID'
         throw error
@@ -111,7 +111,7 @@ export default function Vote({ mode = 'auth' }) {
       setActiveChallenge(challengeAction)
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
       for (let frame = 0; frame < frameCount - 4; frame += 1) {
-        await delay(240)
+        await delay(160)
         capture()
       }
       await delay(200)
@@ -228,11 +228,11 @@ export default function Vote({ mode = 'auth' }) {
             key={cameraKey}
             ref={webcamRef}
             screenshotFormat="image/jpeg"
-            screenshotQuality={0.92}
-            screenshotWidth={640}
-            screenshotHeight={480}
+            screenshotQuality={0.82}
+            screenshotWidth={480}
+            screenshotHeight={360}
             width={300}
-            videoConstraints={{ width: 640, height: 480, facingMode: 'user' }}
+            videoConstraints={{ width: 480, height: 360, facingMode: 'user' }}
             className="webcam"
             onUserMedia={stream => {
               streamRef.current = stream
