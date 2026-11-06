@@ -14,7 +14,6 @@ def observations(frame_count=liveness.FRAME_COUNT):
     return [
         {
             "live_score": 0.92,
-            "eye_ratio": 0.25,
             "head_turn": 0.0,
             "embedding": np.array([1.0, 0.0], dtype=np.float32),
         }
