@@ -120,17 +120,16 @@ export default function Register() {
     say('success', t('idv.verified')); setStep(3)
   }
 
-  // ---- face step: registration captures start directly; login retains liveness verification.
-  const capture = useCallback(async () => {
-    if (busy.current) return
-    if (images.length >= MAX_IMAGES) return
+  // ---- face step: capture locally for speed; Python validates all images together on final submission.
+  const capture = useCallback(() => {
+    if (busy.current || images.length >= MAX_IMAGES) return
     const shot = webcamRef.current?.getScreenshot()
     if (!shot) return say('error', t('face.waiting'))
     const b64 = shot.split(',')[1]
-    const r = await run(t('face.checkingImage'), () => axios.post(`${API}/voters/check-face`, { image: b64 }))
-    if (!r) return
-    if (r.error) return setFaceStatus(r.error.message)
-    setImages(p => [...p, b64]); setFaceStatus(t('face.detected')); say('success', t('face.accepted', { n: images.length + 1 }))
+    const nextCount = images.length + 1
+    setImages(p => [...p, b64])
+    setFaceStatus(`Image ${nextCount} captured. Full face checks run when you select Register Face.`)
+    say('success', `Image ${nextCount} captured successfully.`)
   }, [images, t])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitFace = async () => {
@@ -245,8 +244,12 @@ export default function Register() {
               {['face.i1', 'face.i2', 'face.i3', 'face.i4', 'face.i5'].map(k => <li key={k}>{t(k)}</li>)}
               <li>{t('face.i6', { min: MIN_IMAGES })}</li>
             </ol>
-            <p className="hint">Capture 3–5 face images. Liveness verification remains required when logging in.</p>
-            <p className="hint">Your assigned Voter ID: <strong>{form.voter_id}</strong> · Face enrollment is pending until you complete registration.</p>
+            <p className="hint">Capture 3 clear images of only the registered voter. Python checks image quality and duplicate faces when you submit.</p>
+            <div style={{ margin: '12px auto', padding: '12px 18px', maxWidth: 420, border: '1px solid var(--accent, #d89b55)', borderRadius: 12, background: 'rgba(216,155,85,0.10)' }}>
+              <p className="hint" style={{ margin: 0, fontSize: 14 }}>YOUR ASSIGNED VOTER ID</p>
+              <h2 style={{ margin: '4px 0', letterSpacing: 2 }}>{form.voter_id}</h2>
+              <p className="hint" style={{ margin: 0, fontSize: 12 }}>Face enrollment is pending until registration completes.</p>
+            </div>
             <p className="prompt">{images.length < MAX_IMAGES ? t(`face.prompt${images.length + 1}`) : t('face.allCaptured')}</p>
             <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg" screenshotQuality={0.92} videoConstraints={VIDEO}
               className="webcam" style={{ width: 320, maxWidth: '100%' }}
